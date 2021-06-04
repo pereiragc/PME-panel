@@ -47,7 +47,7 @@ key2 <- c("UF", "MÊS", "V102", "V103")
 #+end_src
 
 
-Below I use ~hhid2~ as merging key between person and household datasets, and include ~hhid~ in the people data. The output of the block is a random household
+Below I use ~hhid2~ as merging key between person and household datasets, and include ~hhid~ in the people data.
 
 #+begin_src R :session :results silent
 
