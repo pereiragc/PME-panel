@@ -85,6 +85,7 @@ library(data.table)
 pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
 
 hh95 <- fread(file.path(pme_dir, "household-1995.csv"))
+pp95 <- fread(file.path(pme_dir, "person-1995.csv"))
 
 ## Create household IDs including / excluding V101 & V106
 hh95[, `:=`(hhid1 = paste(UF, V101, V102, V103, V106, sep = "-"),
@@ -236,4 +237,121 @@ Interpreted as: "for each ~ANO~, there is a single entry per ~hhid2~"
 | Sector              |
 * Documentation
 ** Combining the data
-- see [[sec:issue-identify-people-household]]
+<<sec:merge-key-algorithm>>
+
+Note: see [[sec:issue-identify-people-household]] for how the algorithm came about
+
+
+First, just a quick wrapper for pasting a given set of columns with a dash:
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+
+generate_key <- function(dthh, keyvars = c("UF", "V101", "V102", "V103", "V106")) {
+  Reduce(function(x,y) paste(x, y, sep = "-"),
+         dthh[, keyvars, with = FALSE])
+}
+
+#+end_src
+
+
+So, for example,
+
+#+begin_src R :session :colnames yes :rownames yes :eval false
+
+hh95[, hhid := generate_key(.SD)]
+
+hh95[1:5, .(UF, V101, V102, V103, V106, hhid)] # show selected rows
+
+#+end_src
+
+#+RESULTS:
+|   | UF | V101 |   V102 | V103 | V106 |             hhid |
+|---+----+------+--------+------+------+------------------|
+| 1 | 31 |   14 | 310018 |    1 |    1 | 31-14-310018-1-1 |
+| 2 | 31 |   31 | 310018 |    2 |    1 | 31-31-310018-2-1 |
+| 3 | 31 |   49 | 310018 |    3 |    1 | 31-49-310018-3-1 |
+| 4 | 31 |   66 | 310018 |    4 |    1 | 31-66-310018-4-1 |
+| 5 | 31 |   83 | 310018 |    5 |    1 | 31-83-310018-5-1 |
+
+
+This is the key for merging people and households
+
+#+begin_src R :session :results silent
+key2 <- c("UF", "MÊS", "V102", "V103")
+#+end_src
+
+
+Below I use ~hhid2~ as merging key between person and household datasets, and include ~hhid~ in the people data. The output of the block is a random household
+
+#+begin_src R :session :results silent
+
+hh95[, hhid2 := generate_key(.SD, key2)]
+pp95[, hhid2 := generate_key(.SD, key2)]
+pp95[hh95, hhid := hhid , on = "hhid2"]
+
+pp95[, .N] # otherwise org-mode stutters for some reason
+
+#+end_src
+
+#+RESULTS:
+
+
+*** Sanity checks
+
+Let's try some sanity checks on the merging procedure. In the household dataset, we observe the number of people in the household, as well as the number of people over 10 years old.
+
+So we take three random households in the data:
+
+
+#+begin_src R :session
+
+set.seed(126)
+hh_sample <- pp95[, sample(unique(hhid), 3)]
+
+hh_sample
+
+#+end_src
+
+#+RESULTS:
+|   33-12-332127-1-4 |
+| 29-45-29001030-9-3 |
+|   43-12-432164-2-4 |
+
+
+...and get the number of people in the household
+
+#+begin_src R :session :colnames yes
+
+hh95[
+  V109 > 0  ## avoid "bad" entries
+][
+  hhid %in% hh_sample,
+  .(number_people = V109[1], number_ppl_above10 = V110[1]),
+  hhid][
+  order(hhid)
+]
+
+#+end_src
+
+#+RESULTS:
+|               hhid | number_people | number_ppl_above10 |
+|--------------------+---------------+--------------------|
+| 29-45-29001030-9-3 |             5 |                  3 |
+|   33-12-332127-1-4 |             3 |                  2 |
+|   43-12-432164-2-4 |             2 |                  1 |
+
+
+Now let's see the implied number of people based on the merge:
+
+#+begin_src R :session :colnames yes
+
+pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][order(hhid)]
+
+#+end_src
+
+#+RESULTS:
+|               hhid | implied_n_people |
+|--------------------+------------------|
+| 29-45-29001030-9-3 |                3 |
+|   33-12-332127-1-4 |                2 |
+|   43-12-432164-2-4 |                1 |
