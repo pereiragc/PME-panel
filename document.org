@@ -1,0 +1,239 @@
+#+TITLE: Document stuff related to PME
+
+
+* Issues
+** [2021-06-01 Tue] Weird entries in PME 2000
+*** Issue
+- In the ~person~ dataset, variable V500 should be a blank line, but that fails to happen
+- Evidence: extract person dataset for year 2000 (from raw data), check out following lines of ~PME2KBAP.TXT~:
+  + 31732
+    #+begin_quote
+2920000329000920040111110808   8      017  032120000003801344                            6   3955134211361742054  0000000501018                                          6114335 0310             000000190
+    #+end_quote
+    1. More than 137 characters (which should be  max)
+    2. Characters 115 to 128 should be blank, but instead we have "0000000501018 "
+  + 35269
+    #+begin_quote
+292060                        34                          4               0000329010920150135    0 90060 11111225963032401301041152  0003230322170                                                  0 2        022   0000329010920150135    0 900602315 0202068138  1301041152     022   06                         34                            000000190
+    #+end_quote
+    1. Again, line is too large
+    2. Year (chrs 3-6) is 2060
+    3. again, garbage where there should be a blank space
+*** Analysis
+- Only happens in Bahia
+- Happens in /at least/ 13% of observations (so substantial for that (state,year) pair)
+  + This is found via
+
+    #+begin_src R
+library(data.table)
+
+pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData/"
+DT <- data.table::fread(file.path(pme_dir, "person-2000.csv"))
+
+DT[V500 != ""][, .N] /  DT[.state == "BA"][,.N]
+    #+end_src
+
+    #+RESULTS:
+    : 0.134287044701987
+
+    - note that ~fread~ automatically trims whitespaces, so this finds all instances in which ~V500~ is different than whitespace
+
+** [2021-06-01 Tue] Non-empty entries of V500 in PME 1999
+*** Analysis
+- That now happens across states
+    #+begin_src R
+library(data.table)
+
+pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData/"
+DT <- data.table::fread(file.path(pme_dir, "person-1999.csv"))
+
+DT[, .(prop = sum(V500 != "") / .N), .state]
+
+    #+end_src
+
+    #+RESULTS:
+    | BA | 0.0736372095514155 |
+    | MG |  0.167435718846132 |
+    | PE |   0.19549086573045 |
+    | RJ |  0.217595283567217 |
+    | RS |  0.190769608158068 |
+    | SP |  0.228151288335431 |
+
+- However, the associated entries don't seem (from eyeballing) too weird. For example, the weights associated with problematic entries are within the range of other entries (this is important because the weight entries come after ~V500~)
+** [2021-06-03 Thu] Impossibility of identifying person to household in PME99-2k
+<<sec:issue-identify-people-household>>
+The identifiers of households (at least according to Ribas and Soares, 2008) in the OLD PME is the following:
+
+household id = V010 + V101 + V102 + V103 + V106
+
+  | Variable | Description         |                                                                              |
+  |----------+---------------------+------------------------------------------------------------------------------|
+  | v010     | UF                  |                                                                              |
+  | v101     | Numero no 2.02/3.03 | "identifies selected household unit in listing instruments"                  |
+  | v102     | Numero de controle  | "identifies survey area code"                                                |
+  | v103     | numero de serie     | "corresponds number of the household selected within each investigated area" |
+  | v106     | remessa             | "identifies survey periods in accordance with 'Periods for PME' table;        |
+  |          |                     | codes 1-4 according to survey interview week"                                |
+
+
+However, variables ~V101~, ~V106~ aren't not available on persons databases!
+
+Of the variables above, only ~V10~ [UF], ~V102~ and ~V103~ are available. But that is not sufficient to uniquely identify households:
+
+#+begin_src R :session
+library(data.table)
+pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
+
+hh95 <- fread(file.path(pme_dir, "household-1995.csv"))
+
+## Create household IDs including / excluding V101 & V106
+hh95[, `:=`(hhid1 = paste(UF, V101, V102, V103, V106, sep = "-"),
+            hhid2 = paste(UF, V102, V103, sep = "-"))]
+
+
+hh95[, .(n_unique_id1 = length(unique(hhid1))), hhid2][, .(freq = .N), n_unique_id1]
+#+end_src
+
+#+RESULTS:
+| 3 | 17855 |
+| 4 | 18444 |
+| 2 |   274 |
+| 1 | 39158 |
+| 5 |   652 |
+| 6 |    18 |
+
+
+Above shows that there are 17855 instances of ~hhid2~ (i.e., the one excluding V101 and V106) that match with 3 ~hhid1~.
+
+However, looking at some examples, e.g., hhid2 = 35-352012-2, we see
+
+#+begin_src R :session :colnames yes
+hh95[hhid2 == "35-352012-2", .(hhid1 = unique(hhid1)), hhid2]
+#+end_src
+
+#+RESULTS:
+|       hhid2 |            hhid1 |
+|-------------+------------------|
+| 35-352012-2 | 35-19-352012-2-1 |
+| 35-352012-2 | 35-20-352012-2-1 |
+| 35-352012-2 | 35-21-352012-2-1 |
+
+
+In the example above, the ~hhid2~ is associated with three ~hhid1~; however, if we look at more columns,
+
+#+begin_src R :session :colnames yes
+hh95[hhid2 == "35-352012-2", .(UF, ANO, MÊS, hhid1, hhid2)]
+#+end_src
+
+#+RESULTS:
+| UF |  ANO | MÊS |            hhid1 |       hhid2 |
+|----+------+-----+------------------+-------------|
+| 35 | 1995 |   1 | 35-19-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   2 | 35-19-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   3 | 35-19-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   4 | 35-19-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   5 | 35-20-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   6 | 35-20-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   7 | 35-20-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   8 | 35-20-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |   9 | 35-21-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |  10 | 35-21-352012-2-1 | 35-352012-2 |
+| 35 | 1995 |  11 | 35-21-352012-2-1 | 35-352012-2 |
+
+
+So the entries under ~hhid2~ seem to be ordered by month.
+
+Now, is it true that /within a month/, hhid2 and hhid1 identify the same household?
+
+#+begin_src R :session :colnames yes
+hh95[, .(n_unique_id1 = length(unique(hhid1))), .(MÊS, hhid2)][, .N, n_unique_id1]
+#+end_src
+
+#+RESULTS:
+| n_unique_id1 |      N |
+|--------------+--------|
+|            1 | 447844 |
+
+
+Bingo! At least for 1995, this seems to hold. Let's check more generally (this might take ~60 seconds):
+
+#+begin_src R :session :colnames yes :eval no
+
+years_check <- list.files(pme_dir, pattern = "household-(199[1-9]|2000)",
+                          full.names = TRUE)
+
+hh_all <- rbindlist(lapply(years_check, data.table::fread))
+
+hh_all[, hhid1 := paste(UF, V101, V102, V103, V106, sep = "-")]
+hh_all[, hhid2 := paste(UF, MÊS, V102, V103, sep = "-")]
+hh_all[, .(n_unique_id1 = length(unique(hhid1))), .(ANO, hhid2)][, .N, .(ANO, n_unique_id1)]
+
+#+end_src
+
+#+RESULTS:
+|  ANO | n_unique_id1 |      N |
+|------+--------------+--------|
+| 1991 |            1 | 445988 |
+| 1992 |            1 | 449351 |
+| 1993 |            1 | 447479 |
+| 1994 |            1 | 436161 |
+| 1995 |            1 | 447844 |
+| 1996 |            1 | 463306 |
+| 1997 |            1 | 471013 |
+| 1998 |            1 | 481082 |
+| 1999 |            1 | 481770 |
+| 2000 |            1 | 489365 |
+
+Note that I included ~MÊS~ (month) in ~hhid2~, and now we get an ID that is /finer/ than ~hhid1~! In fact, the above computation was unnecessary, because ~hhid2~ identifies entries of the household dataset uniquely:
+
+#+begin_src R :session :colnames yes
+hh_all[, .(nobs = .N), .(hhid2, ANO)][, .(freq = .N), .(nobs, ANO)]
+#+end_src
+
+#+RESULTS:
+| nobs |  ANO |   freq |
+|------+------+--------|
+|    1 | 1991 | 445988 |
+|    1 | 1992 | 449351 |
+|    1 | 1993 | 447479 |
+|    1 | 1994 | 436161 |
+|    1 | 1995 | 447844 |
+|    1 | 1996 | 463306 |
+|    1 | 1997 | 471013 |
+|    1 | 1998 | 481082 |
+|    1 | 1999 | 481770 |
+|    1 | 2000 | 489365 |
+
+Interpreted as: "for each ~ANO~, there is a single entry per ~hhid2~"
+* Tasks
+** Identify people and households
+- In old PME, had previously used variable ~V1~ to identify household, which was apparently completely wrong
+- However, found ~Ribas, R. P., & Soares, S. S. D., Sobre o painel da pesquisa mensal de emprego (pme) do ibge (2008).~
+- They say that in order to identify households, one needs to use the following variables:
+
+  | Variable | Description      |      |
+  |----------+------------------+------|
+  | v035     | RM               | v010 |
+  | v040     | No de controle   | v102 |
+  | v050     | No de serie      | v103 |
+  | v060     | Painel           | ?    |
+  | v063     | Grupo rotacional | v106 |
+
+- About old PME there are conflicting pieces of information: they say the following should be used
+
+
+** Ideal variable selection
+
+|---------------------|
+| Household ID        |
+| Person ID           |
+| State               |
+| Age                 |
+| Sex                 |
+| Education           |
+| Labor market status |
+| Occupation          |
+| Sector              |
+* Documentation
+** Combining the data
+- see [[sec:issue-identify-people-household]]
