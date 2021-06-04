@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Documentation</title>
+<meta name="author" content="Gustavo"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/dist/reveal.css"/>
+
+<link rel="stylesheet" href="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/dist/theme/black.css" id="theme"/>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide">
+<h1 class="title">Documentation</h1><h2 class="author">Gustavo</h2><p class="date">Created: 2021-06-04 Fri 14:08</p>
+</section>
+<section id="table-of-contents-section">
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#/slide-1">1. Building the PME panel</a>
+<ul>
+<li><a href="#/slide-1-1">1.1. Combining <code>person</code> and <code>household</code> datasets</a>
+<ul>
+<li><a href="#/slide-1-1-1">1.1.1. Sanity check: number of people in household</a></li>
+<li><a href="#/slide-1-1-2">1.1.2. Combiner function</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#/slide-2">2. Issues</a>
+<ul>
+<li><a href="#/slide-2-1">2.1. <span class="timestamp-wrapper"><span class="timestamp">[2021-06-01 Tue] </span></span> Weird entries in PME 2000</a>
+<ul>
+<li><a href="#/slide-2-1-1">2.1.1. Issue</a></li>
+<li><a href="#/slide-2-1-2">2.1.2. Analysis</a></li>
+</ul>
+</li>
+<li><a href="#/slide-2-2">2.2. <span class="timestamp-wrapper"><span class="timestamp">[2021-06-01 Tue] </span></span> Non-empty entries of V500 in PME 1999</a>
+<ul>
+<li><a href="#/slide-2-2-1">2.2.1. Analysis</a></li>
+</ul>
+</li>
+<li><a href="#/slide-2-3">2.3. <span class="timestamp-wrapper"><span class="timestamp">[2021-06-03 Thu] </span></span> Impossibility of identifying person to household in PME99-2k</a></li>
+</ul>
+</li>
+<li><a href="#/slide-3">3. Tasks</a>
+<ul>
+<li><a href="#/slide-3-1">3.1. Identify people and households</a></li>
+<li><a href="#/slide-3-2">3.2. Ideal variable selection</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</section>
+
+<section>
+<section id="slide-1">
+<h2 id="1"><span class="section-number-2">1</span> Building the PME panel</h2>
+<div class="outline-text-2" id="text-1">
+</div>
+</section>
+<section id="slide-1-1">
+<h3 id="1-1"><span class="section-number-3">1.1</span> Combining <code>person</code> and <code>household</code> datasets</h3>
+<p>
+<a id="org9b80bf5"></a>
+</p>
+
+<p class="forwardlink">
+Note: see <a href="#/slide-org0a04cbb" class="forwardlink">2.3</a> for how the algorithm came about
+</p>
+
+
+<p>
+First, just a quick wrapper for pasting a given set of columns with a dash:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+<span style="color: #a626a4;">generate_key</span> <span style="color: #b751b6;">&lt;-</span> <span style="color: #e45649;">function</span>(dthh, keyvars = c(<span style="color: #50a14f;">"UF"</span>, <span style="color: #50a14f;">"V101"</span>, <span style="color: #50a14f;">"V102"</span>, <span style="color: #50a14f;">"V103"</span>, <span style="color: #50a14f;">"V106"</span>)) {
+  Reduce(<span style="color: #e45649;">function</span>(x,y) paste(x, y, sep = <span style="color: #50a14f;">"-"</span>),
+         dthh[, keyvars, with = <span style="color: #986801;">FALSE</span>])
+}
+
+</pre>
+</div>
+
+
+<p>
+So, for example,
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+hh95[, hhid := generate_key(.SD)]
+
+hh95[<span style="color: #da8548; font-weight: bold;">1</span>:<span style="color: #da8548; font-weight: bold;">5</span>, .(UF, V101, V102, V103, V106, hhid)] <span style="color: #9ca0a4;"># </span><span style="color: #9ca0a4;">show selected rows</span>
+
+</pre>
+</div>
+
+
+<p>
+This is the key for merging people and households
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">key2 <span style="color: #b751b6;">&lt;-</span> c(<span style="color: #50a14f;">"UF"</span>, <span style="color: #50a14f;">"M&#202;S"</span>, <span style="color: #50a14f;">"V102"</span>, <span style="color: #50a14f;">"V103"</span>)
+</pre>
+</div>
+
+
+<p>
+Below I use <code>hhid2</code> as merging key between person and household datasets, and include <code>hhid</code> in the people data.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+hh95[, hhid2 := generate_key(.SD, key2)]
+pp95[, hhid2 := generate_key(.SD, key2)]
+pp95[hh95, hhid := hhid , on = <span style="color: #50a14f;">"hhid2"</span>]
+
+pp95[, .N] <span style="color: #9ca0a4;"># </span><span style="color: #9ca0a4;">otherwise org-mode stutters for some reason</span>
+
+</pre>
+</div>
+
+
+</section>
+<section id="slide-1-1-1">
+<h4 id="1-1-1"><span class="section-number-4">1.1.1</span> Sanity check: number of people in household</h4>
+<p>
+Let&rsquo;s try some sanity checks on the merging procedure. In the household dataset, we observe the number of people in the household, as well as the number of people over 10 years old.
+</p>
+
+<p>
+So we take three random households in the data:
+</p>
+
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+set.seed(<span style="color: #da8548; font-weight: bold;">126</span>)
+hh_sample <span style="color: #b751b6;">&lt;-</span> pp95[, sample(unique(hhid), <span style="color: #da8548; font-weight: bold;">3</span>)]
+
+hh_sample
+
+</pre>
+</div>
+
+
+<p>
+&#x2026;and get the number of people in the household
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+hh95[
+  V109 &gt; <span style="color: #da8548; font-weight: bold;">0</span>  <span style="color: #9ca0a4;">## </span><span style="color: #9ca0a4;">avoid "bad" entries</span>
+][
+  hhid <span style="color: #b751b6;">%in%</span> hh_sample,
+  .(number_people = V109[<span style="color: #da8548; font-weight: bold;">1</span>], number_ppl_above10 = V110[<span style="color: #da8548; font-weight: bold;">1</span>]),
+  hhid][
+  order(hhid)
+]
+
+</pre>
+</div>
+
+
+<p>
+Now let&rsquo;s see the implied number of people based on the merge:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+pp95[hhid <span style="color: #b751b6;">%in%</span> hh_sample, .(implied_n_people = length(unique(V201))), hhid][order(hhid)]
+
+</pre>
+</div>
+</section>
+<section id="slide-1-1-2">
+<h4 id="1-1-2"><span class="section-number-4">1.1.2</span> Combiner function</h4>
+<p>
+For the old PME, there are two ways in which the data are distributed:
+</p>
+
+<ol>
+<li>In &ldquo;person in household line&rdquo; format, for the 80s</li>
+<li>In separate files for the 90s</li>
+
+</ol>
+
+
+</section>
+</section>
+<section>
+<section id="slide-2">
+<h2 id="2"><span class="section-number-2">2</span> Issues</h2>
+<div class="outline-text-2" id="text-2">
+</div>
+</section>
+<section id="slide-2-1">
+<h3 id="2-1"><span class="section-number-3">2.1</span> <span class="timestamp-wrapper"><span class="timestamp">[2021-06-01 Tue] </span></span> Weird entries in PME 2000</h3>
+<div class="outline-text-3" id="text-2-1">
+</div>
+</section>
+<section id="slide-2-1-1">
+<h4 id="2-1-1"><span class="section-number-4">2.1.1</span> Issue</h4>
+<ul>
+<li>In the <code>person</code> dataset, variable V500 should be a blank line, but that fails to happen</li>
+<li>Evidence: extract person dataset for year 2000 (from raw data), check out following lines of <code>PME2KBAP.TXT</code>:
+<ul>
+<li><p>
+31732
+</p>
+<blockquote>
+<p>
+2920000329000920040111110808   8      017  032120000003801344                            6   3955134211361742054  0000000501018                                          6114335 0310             000000190
+</p>
+</blockquote>
+<ol>
+<li>More than 137 characters (which should be  max)</li>
+<li>Characters 115 to 128 should be blank, but instead we have &ldquo;0000000501018 &rdquo;</li>
+
+</ol></li>
+<li><p>
+35269
+</p>
+<blockquote>
+<p>
+292060                        34                          4               0000329010920150135    0 90060 11111225963032401301041152  0003230322170                                                  0 2        022   0000329010920150135    0 900602315 0202068138  1301041152     022   06                         34                            000000190
+</p>
+</blockquote>
+<ol>
+<li>Again, line is too large</li>
+<li>Year (chrs 3-6) is 2060</li>
+<li>again, garbage where there should be a blank space</li>
+
+</ol></li>
+
+</ul></li>
+
+</ul>
+</section>
+<section id="slide-2-1-2">
+<h4 id="2-1-2"><span class="section-number-4">2.1.2</span> Analysis</h4>
+<ul>
+<li>Only happens in Bahia</li>
+<li>Happens in <i>at least</i> 13% of observations (so substantial for that (state,year) pair)
+<ul>
+<li><p>
+This is found via
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R"><span style="color: #b751b6;">library</span>(data.table)
+
+pme_dir <span style="color: #b751b6;">&lt;-</span> <span style="color: #50a14f;">"/home/gustavo/Dropbox/v2/data/PME/FullData/"</span>
+DT <span style="color: #b751b6;">&lt;-</span> data.table::fread(file.path(pme_dir, <span style="color: #50a14f;">"person-2000.csv"</span>))
+
+DT[V500 != <span style="color: #50a14f;">""</span>][, .N] /  DT[.state == <span style="color: #50a14f;">"BA"</span>][,.N]
+</pre>
+</div>
+
+<ul>
+<li>note that <code>fread</code> automatically trims whitespaces, so this finds all instances in which <code>V500</code> is different than whitespace</li>
+
+</ul></li>
+
+</ul></li>
+
+</ul>
+
+</section>
+<section id="slide-2-2">
+<h3 id="2-2"><span class="section-number-3">2.2</span> <span class="timestamp-wrapper"><span class="timestamp">[2021-06-01 Tue] </span></span> Non-empty entries of V500 in PME 1999</h3>
+<div class="outline-text-3" id="text-2-2">
+</div>
+</section>
+<section id="slide-2-2-1">
+<h4 id="2-2-1"><span class="section-number-4">2.2.1</span> Analysis</h4>
+<ul>
+<li><p>
+That now happens across states
+</p>
+<div class="org-src-container">
+
+<pre class="src src-R"><span style="color: #b751b6;">library</span>(data.table)
+
+pme_dir <span style="color: #b751b6;">&lt;-</span> <span style="color: #50a14f;">"/home/gustavo/Dropbox/v2/data/PME/FullData/"</span>
+DT <span style="color: #b751b6;">&lt;-</span> data.table::fread(file.path(pme_dir, <span style="color: #50a14f;">"person-1999.csv"</span>))
+
+DT[, .(prop = sum(V500 != <span style="color: #50a14f;">""</span>) / .N), .state]
+
+</pre>
+</div></li>
+
+<li>However, the associated entries don&rsquo;t seem (from eyeballing) too weird. For example, the weights associated with problematic entries are within the range of other entries (this is important because the weight entries come after <code>V500</code>)</li>
+
+</ul>
+</section>
+<section id="slide-2-3">
+<h3 id="2-3"><span class="section-number-3">2.3</span> <span class="timestamp-wrapper"><span class="timestamp">[2021-06-03 Thu] </span></span> Impossibility of identifying person to household in PME99-2k</h3>
+<p>
+<a id="org0a04cbb"></a>
+The identifiers of households (at least according to Ribas and Soares, 2008) in the OLD PME is the following:
+</p>
+
+<p>
+household id = V010 + V101 + V102 + V103 + V106
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Variable</th>
+<th scope="col" class="org-left">Description</th>
+<th scope="col" class="org-left">&#xa0;</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">v010</td>
+<td class="org-left">UF</td>
+<td class="org-left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="org-left">v101</td>
+<td class="org-left">Numero no 2.02/3.03</td>
+<td class="org-left">&ldquo;identifies selected household unit in listing instruments&rdquo;</td>
+</tr>
+
+<tr>
+<td class="org-left">v102</td>
+<td class="org-left">Numero de controle</td>
+<td class="org-left">&ldquo;identifies survey area code&rdquo;</td>
+</tr>
+
+<tr>
+<td class="org-left">v103</td>
+<td class="org-left">numero de serie</td>
+<td class="org-left">&ldquo;corresponds number of the household selected within each investigated area&rdquo;</td>
+</tr>
+
+<tr>
+<td class="org-left">v106</td>
+<td class="org-left">remessa</td>
+<td class="org-left">&ldquo;identifies survey periods in accordance with &lsquo;Periods for PME&rsquo; table;</td>
+</tr>
+
+<tr>
+<td class="org-left">&#xa0;</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-left">codes 1-4 according to survey interview week&ldquo;</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>
+However, variables <code>V101</code>, <code>V106</code> aren&rsquo;t not available on persons databases!
+</p>
+
+<p>
+Of the variables above, only <code>V10</code> [UF], <code>V102</code> and <code>V103</code> are available. But that is not sufficient to uniquely identify households:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R"><span style="color: #b751b6;">library</span>(data.table)
+pme_dir <span style="color: #b751b6;">&lt;-</span> <span style="color: #50a14f;">"/home/gustavo/Dropbox/v2/data/PME/FullData"</span>
+
+hh95 <span style="color: #b751b6;">&lt;-</span> fread(file.path(pme_dir, <span style="color: #50a14f;">"household-1995.csv"</span>))
+pp95 <span style="color: #b751b6;">&lt;-</span> fread(file.path(pme_dir, <span style="color: #50a14f;">"person-1995.csv"</span>))
+
+<span style="color: #9ca0a4;">## </span><span style="color: #9ca0a4;">Create household IDs including / excluding V101 &amp; V106</span>
+hh95[, <span style="color: #383a42; background-color: #f0f0f0;">`:=`</span>(hhid1 = paste(UF, V101, V102, V103, V106, sep = <span style="color: #50a14f;">"-"</span>),
+            hhid2 = paste(UF, V102, V103, sep = <span style="color: #50a14f;">"-"</span>))]
+
+
+hh95[, .(n_unique_id1 = length(unique(hhid1))), hhid2][, .(freq = .N), n_unique_id1]
+</pre>
+</div>
+
+
+<p>
+Above shows that there are 17855 instances of <code>hhid2</code> (i.e., the one excluding V101 and V106) that match with 3 <code>hhid1</code>.
+</p>
+
+<p>
+However, looking at some examples, e.g., hhid2 = 35-352012-2, we see
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">hh95[hhid2 == <span style="color: #50a14f;">"35-352012-2"</span>, .(hhid1 = unique(hhid1)), hhid2]
+</pre>
+</div>
+
+
+<p>
+In the example above, the <code>hhid2</code> is associated with three <code>hhid1</code>; however, if we look at more columns,
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">hh95[hhid2 == <span style="color: #50a14f;">"35-352012-2"</span>, .(UF, ANO, M&#202;S, hhid1, hhid2)]
+</pre>
+</div>
+
+
+<p>
+So the entries under <code>hhid2</code> seem to be ordered by month.
+</p>
+
+<p>
+Now, is it true that <i>within a month</i>, hhid2 and hhid1 identify the same household?
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">hh95[, .(n_unique_id1 = length(unique(hhid1))), .(M&#202;S, hhid2)][, .N, n_unique_id1]
+</pre>
+</div>
+
+
+<p>
+Bingo! At least for 1995, this seems to hold. Let&rsquo;s check more generally (this might take ~60 seconds):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">
+years_check <span style="color: #b751b6;">&lt;-</span> list.files(pme_dir, pattern = <span style="color: #50a14f;">"household-(199[1-9]|2000)"</span>,
+                          full.names = <span style="color: #986801;">TRUE</span>)
+
+hh_all <span style="color: #b751b6;">&lt;-</span> rbindlist(lapply(years_check, data.table::fread))
+
+hh_all[, hhid1 := paste(UF, V101, V102, V103, V106, sep = <span style="color: #50a14f;">"-"</span>)]
+hh_all[, hhid2 := paste(UF, M&#202;S, V102, V103, sep = <span style="color: #50a14f;">"-"</span>)]
+hh_all[, .(n_unique_id1 = length(unique(hhid1))), .(ANO, hhid2)][, .N, .(ANO, n_unique_id1)]
+
+</pre>
+</div>
+
+<p>
+Note that I included <code>MÊS</code> (month) in <code>hhid2</code>, and now we get an ID that is <i>finer</i> than <code>hhid1</code>! In fact, the above computation was unnecessary, because <code>hhid2</code> identifies entries of the household dataset uniquely:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R">hh_all[, .(nobs = .N), .(hhid2, ANO)][, .(freq = .N), .(nobs, ANO)]
+</pre>
+</div>
+
+<p>
+Interpreted as: &ldquo;for each <code>ANO</code>, there is a single entry per <code>hhid2</code>&rdquo;
+</p>
+</section>
+</section>
+<section>
+<section id="slide-3">
+<h2 id="3"><span class="section-number-2">3</span> Tasks</h2>
+<div class="outline-text-2" id="text-3">
+</div>
+</section>
+<section id="slide-3-1">
+<h3 id="3-1"><span class="section-number-3">3.1</span> Identify people and households</h3>
+<ul>
+<li>In old PME, had previously used variable <code>V1</code> to identify household, which was apparently completely wrong</li>
+<li>However, found <code>Ribas, R. P., &amp; Soares, S. S. D., Sobre o painel da pesquisa mensal de emprego (pme) do ibge (2008).</code></li>
+<li><p>
+They say that in order to identify households, one needs to use the following variables:
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Variable</th>
+<th scope="col" class="org-left">Description</th>
+<th scope="col" class="org-left">&#xa0;</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">v035</td>
+<td class="org-left">RM</td>
+<td class="org-left">v010</td>
+</tr>
+
+<tr>
+<td class="org-left">v040</td>
+<td class="org-left">No de controle</td>
+<td class="org-left">v102</td>
+</tr>
+
+<tr>
+<td class="org-left">v050</td>
+<td class="org-left">No de serie</td>
+<td class="org-left">v103</td>
+</tr>
+
+<tr>
+<td class="org-left">v060</td>
+<td class="org-left">Painel</td>
+<td class="org-left">?</td>
+</tr>
+
+<tr>
+<td class="org-left">v063</td>
+<td class="org-left">Grupo rotacional</td>
+<td class="org-left">v106</td>
+</tr>
+</tbody>
+</table></li>
+
+<li>About old PME there are conflicting pieces of information: they say the following should be used</li>
+
+</ul>
+
+
+</section>
+<section id="slide-3-2">
+<h3 id="3-2"><span class="section-number-3">3.2</span> Ideal variable selection</h3>
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">Household ID</td>
+</tr>
+
+<tr>
+<td class="org-left">Person ID</td>
+</tr>
+
+<tr>
+<td class="org-left">State</td>
+</tr>
+
+<tr>
+<td class="org-left">Age</td>
+</tr>
+
+<tr>
+<td class="org-left">Sex</td>
+</tr>
+
+<tr>
+<td class="org-left">Education</td>
+</tr>
+
+<tr>
+<td class="org-left">Labor market status</td>
+</tr>
+
+<tr>
+<td class="org-left">Occupation</td>
+</tr>
+
+<tr>
+<td class="org-left">Sector</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</div>
+</div>
+<script src="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/dist/reveal.js"></script>
+<script src="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/plugin/markdown/markdown.js"></script>
+<script src="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/plugin/notes/notes.js"></script>
+<script src="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/plugin/search/search.js"></script>
+<script src="/home/gustavo/.emacs.d/.local/straight/build-27.2/revealjs/plugin/zoom/zoom.js"></script>
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: false,
+keyboard: true,
+mouseWheel: false,
+fragmentInURL: false,
+hashOneBasedIndex: false,
+pdfSeparateFragments: true,
+
+overview: true,
+
+transition: 'convex',
+transitionSpeed: 'default',
+
+// Plugins with reveal.js 4.x
+plugins: [ RevealMarkdown, RevealNotes, RevealSearch, RevealZoom ],
+
+// Optional libraries used to extend reveal.js
+dependencies: [
+]
+
+});
+</script>
+</body>
+</html>

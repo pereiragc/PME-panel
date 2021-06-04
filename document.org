@@ -1,8 +1,7 @@
 #+TITLE: Documentation
 
-
-* Documentation
-** Combining the data
+* Building the PME panel
+** Combining ~person~ and ~household~ datasets
 <<sec:merge-key-algorithm>>
 
 Note: see [[sec:issue-identify-people-household]] for how the algorithm came about
@@ -62,7 +61,7 @@ pp95[, .N] # otherwise org-mode stutters for some reason
 #+RESULTS:
 
 
-*** Sanity checks
+*** Sanity check: number of people in household
 
 Let's try some sanity checks on the merging procedure. In the household dataset, we observe the number of people in the household, as well as the number of people over 10 years old.
 
