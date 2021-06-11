@@ -1,19 +1,325 @@
 #+TITLE: Documentation
 
 * Building the PME panel
-** Combining ~person~ and ~household~ datasets
-<<sec:merge-key-algorithm>>
+** Load data
+Below is a convenience function for loading PME data into memory. You can specify unit to be "person", "household", or any other string (which will load both). The timeframe can be 80s, 90s or both (by again specifying any other string.)
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+
+.pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
+
+oldpmeread <- function(unit = "", timeframe = "", pme_dir = .pme_dir) {
+  regex1 <- switch(unit, "person" = "person-",
+                   "household" = "household-",
+                   "(person|household)-")
+  regex2 <- switch(timeframe, "80s" = "19(8.|90)",
+                   "90s" = "(199[1-9]|2000)",
+                   "(19[0-9]{2}|2000)")
+
+  regex <- paste0(regex1, regex2)
+
+  fff <- list.files(.pme_dir, pattern = regex, full.names = TRUE)
+
+  ldata <- lapply(fff, function(fname) {
+
+    rrr <- ".*(person|household)-([0-9]{4})\\.csv"
+    ftype <- gsub(rrr, "\\1", fname)
+    year <- as.integer(gsub(rrr, "\\2", fname))
+
+
+    DT <- data.table::fread(fname)
+
+    DT[, .year := year]
+
+    return(list(
+      .year = year,
+      .unit = ftype,
+      DT = DT
+    ))
+  })
+  return(ldata)
+}
+
+#+end_src
+
+
+For the examples that show up later in this documentation, I have to load some files.
+
+#+begin_src R :session :results silent
+
+library(data.table)
+library(dtsnippets)
+
+## For some examples
+hh95 <- fread(file.path(.pme_dir, "household-1995.csv"))
+pp95 <- fread(file.path(.pme_dir, "person-1995.csv"))
+
+pp_old <- rbindlist(lapply(oldpmeread("person"), function(ll) ll$DT), fill = TRUE)
+hh_old <- rbindlist(lapply(oldpmeread("household"), function(ll) ll$DT), fill = TRUE)
+
+#+end_src
+
+** Checking for issues
+
+*** Inferred states vs V10 vs UF
+
+For years 1984-1990, state is present in column V10. The values were supposed to be
+| State | Code |
+|-------+------|
+| RJ    |   11 |
+| SP    |   21 |
+| RS    |   33 |
+| MG    |   41 |
+| BA    |   59 |
+
+After 1990, the codes change to
+
+| PE | Code |
+|----+------|
+| PE |   26 |
+| BA |   29 |
+| MG |   31 |
+| RJ |   33 |
+| SP |   35 |
+| RS |   43 |
+
+(The column name also changes to UF)
+
+
+However, in 1988-1990 there are other values. Weird.
+
+#+begin_src R :session :colnames yes
+
+countby(hh_old[.year == 1988], .x = ".state", bycols = c("V10"))[[1]]
+
+#+end_src
+
+#+RESULTS:
+| V10 | .state = BA | .state = MG | .state = PE | .state = RJ | .state = RS | .state = SP |
+|-----+-------------+-------------+-------------+-------------+-------------+-------------|
+|  11 |           0 |           0 |           0 |      103691 |           0 |           0 |
+|  12 |           0 |           0 |           0 |        1345 |           0 |           0 |
+|  13 |           0 |           0 |           0 |         497 |           0 |           0 |
+|  14 |           0 |           0 |           0 |         854 |           0 |           0 |
+|  21 |           0 |           0 |           0 |           0 |           0 |      102352 |
+|  22 |           0 |           0 |           0 |           0 |           0 |        1062 |
+|  23 |           0 |           0 |           0 |           0 |           0 |         343 |
+|  24 |           0 |           0 |           0 |           0 |           0 |         558 |
+|  25 |           0 |           0 |           0 |           0 |           0 |         606 |
+|  26 |           0 |           0 |           0 |           0 |           0 |         335 |
+|  27 |           0 |           0 |           0 |           0 |           0 |         105 |
+|  28 |           0 |           0 |           0 |           0 |           0 |         429 |
+|  33 |           0 |           0 |           0 |           0 |       83297 |           0 |
+|  34 |           0 |           0 |           0 |           0 |        1775 |           0 |
+|  35 |           0 |           0 |           0 |           0 |        1018 |           0 |
+|  41 |           0 |       81771 |           0 |           0 |           0 |           0 |
+|  42 |           0 |         915 |           0 |           0 |           0 |           0 |
+|  56 |           0 |           0 |       66030 |           0 |           0 |           0 |
+|  59 |       61414 |           0 |           0 |           0 |           0 |           0 |
+
+Create a flag for that: note that ~oldpme_flag_bad_state~ *has side-effects*.
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+
+oldpme_flag_bad_state <- function(hh_old, flagname = ".flbadstate") {
+  valid_states_V10 <- c(11, 21, 33, 41, 59)
+  valid_states_UF <- c(26, 29, 31, 33, 35, 43)
+
+  hh_old[!is.na(V10), (flagname) := !(V10 %in% valid_states_V10)]
+  hh_old[!is.na(UF), (flagname) := !(UF %in% valid_states_UF)]
+
+}
+
+#+end_src
+
+Let's check the extent of the problem:
+
+#+begin_src R :session :colnames yes
+
+oldpme_flag_bad_state(hh_old)
+
+countby(hh_old, .x = ".flbadstate", bycols = ".year")[[1]]
+
+#+end_src
+
+#+RESULTS:
+| .year | .flbadstate = FALSE | .flbadstate = TRUE |
+|-------+---------------------+--------------------|
+|  1984 |              469618 |              74170 |
+|  1985 |              483076 |              76673 |
+|  1986 |              485892 |              75088 |
+|  1987 |              485919 |              74906 |
+|  1988 |              432525 |              75872 |
+|  1989 |              359378 |              64975 |
+|  1990 |              365876 |              66910 |
+|  1991 |              445988 |                  0 |
+|  1992 |              449351 |                  0 |
+|  1993 |              447479 |                  0 |
+|  1994 |              436161 |                  0 |
+|  1995 |              447844 |                  0 |
+|  1996 |              463306 |                  0 |
+|  1997 |              471013 |                  0 |
+|  1998 |              481082 |                  0 |
+|  1999 |              481770 |                  0 |
+|  2000 |              489365 |                  0 |
+
+*** Inferred year vs ANO
+#+begin_src R :session :results silent
+hh_old[, .flag_inconsistent_year := ANO != .year ]
+pp_old[, .flag_inconsistent_year := ANO != .year ]
+
+tab_ano_hh <- countby(hh_old, .x = ".flag_inconsistent_year", bycols = ".year")
+tab_ano_pp <- countby(pp_old, .x = ".flag_inconsistent_year", bycols = ".year")
+
+#+end_src
+
+
+#+begin_src R :session :colnames yes
+tab_ano_hh[[1]]
+#+end_src
+
+#+RESULTS:
+| .year | .flag_inconsistent_year = NA | .flag_inconsistent_year = FALSE |
+|-------+------------------------------+---------------------------------|
+|  1984 |                       543788 |                               0 |
+|  1985 |                       559749 |                               0 |
+|  1986 |                       560980 |                               0 |
+|  1987 |                       560825 |                               0 |
+|  1988 |                       508397 |                               0 |
+|  1989 |                       424353 |                               0 |
+|  1990 |                       432786 |                               0 |
+|  1991 |                            0 |                          445988 |
+|  1992 |                            0 |                          449351 |
+|  1993 |                            0 |                          447479 |
+|  1994 |                            0 |                          436161 |
+|  1995 |                            0 |                          447844 |
+|  1996 |                            0 |                          463306 |
+|  1997 |                            0 |                          471013 |
+|  1998 |                            0 |                          481082 |
+|  1999 |                            0 |                          481770 |
+|  2000 |                            0 |                          489365 |
+
+#+begin_src R :session :colnames yes
+tab_ano_pp[[1]]
+#+end_src
+
+#+RESULTS:
+| .year | .flag_inconsistent_year = NA | .flag_inconsistent_year = FALSE | .flag_inconsistent_year = TRUE |
+|-------+------------------------------+---------------------------------+--------------------------------|
+|  1984 |                      1396109 |                               0 |                              0 |
+|  1985 |                      1390684 |                               0 |                              0 |
+|  1986 |                      1395301 |                               0 |                              0 |
+|  1987 |                      1395818 |                               0 |                              0 |
+|  1988 |                      1252766 |                               0 |                              0 |
+|  1989 |                      1061684 |                               0 |                              0 |
+|  1990 |                      1084312 |                               0 |                              0 |
+|  1991 |                            0 |                         1096907 |                              0 |
+|  1992 |                            0 |                         1049652 |                              0 |
+|  1993 |                            0 |                         1058058 |                              0 |
+|  1994 |                            0 |                         1077149 |                              0 |
+|  1995 |                            0 |                         1084463 |                              0 |
+|  1996 |                            0 |                         1086939 |                              0 |
+|  1997 |                            0 |                         1099255 |                              0 |
+|  1998 |                            0 |                         1110199 |                              0 |
+|  1999 |                            0 |                         1100798 |                              0 |
+|  2000 |                            0 |                          995803 |                            861 |
+
+
+*Conclusion.* Overall, it seems that this is a minor problem
+
+*** Month columns
+I see two month columns:
+
+|-------------------+-----------------------------------+-------+-----------|
+| Mes da pesquisa   | "mes de investigacao da pesquisa" |       |           |
+|                   |                                   | MES   | 1991-2k   |
+|                   |                                   | V105  | 1984-1990 |
+|-------------------+-----------------------------------+-------+-----------|
+| Mes de referencia | "mes da realizacao da pesquisa"   |       |           |
+|                   |                                   | V2002 | 1984-2k   |
+|-------------------+-----------------------------------+-------+-----------|
+
+A few notes:
+1. ~V2002~ has no missing entries in the old pme sample:
+   #+begin_src R :session :colnames yes
+hh_old[, .(nna = sum(is.na(V2002)))]
+   #+end_src
+
+   #+RESULTS:
+   | nna |
+   |-----|
+   |   0 |
+
+2. Same holds for ~V105~
+   #+begin_src R :session :colnames yes
+hh_old[, .(nna = sum(is.na(V105)))]
+   #+end_src
+
+   #+RESULTS:
+   | nna |
+   |-----|
+   |   0 |
+
+3. Whenever MES and V105 are defined, they are equal:
+   #+begin_src R :session :colnames yes
+hh_old[!is.na(MÊS), .(ndiff = sum(MÊS != V105))]
+   #+end_src
+
+   #+RESULTS:
+   | ndiff |
+   |-------|
+   |     0 |
+
+Now, how do V105 and V2002 compare? Notes:
+
+1. They're definitely not the same:
+
+#+begin_src R :session :colnames yes
+hh_old[, sum(V105 != V2002, na.rm = TRUE)]
+#+end_src
+
+#+RESULTS:
+|      x |
+|--------|
+| 569170 |
+
+2. The difference only exists when the interview is conducted in the early days of the month (day of the month is variable ~V2001~)
+    #+begin_src R :session :colnames yes
+hh_old[V2002 != V105][, .N, V2001][order(-N)]
+    #+end_src
+
+    #+RESULTS:
+    | V2001 |      N |
+    |-------+--------|
+    |     1 | 246123 |
+    |     2 | 187747 |
+    |     3 | 126451 |
+    |     4 |   8848 |
+    |    31 |      1 |
+
+    No idea why that 31st is there, probably an anomaly.
+
+*Conclusion.* Use column V105 for the month to which the answers pertain, and V2002 for the month in which  the research is conducted.
+
+** Combining ~person~ and ~household~ datasets: example of 1995
+<<sec:merge-key-algorithm-95>>
 
 Note: see [[sec:issue-identify-people-household]] for how the algorithm came about
 
 
-First, just a quick wrapper for pasting a given set of columns with a dash:
+First, just a quick wrapper for pasting a given set of columns with a dash; whenever one of the columns is missing, that invalidates the id.
 
 #+begin_src R :session :tangle lib_oldpme.r :results silent
 
-generate_key <- function(dthh, keyvars = c("UF", "V101", "V102", "V103", "V106")) {
-  Reduce(function(x,y) paste(x, y, sep = "-"),
-         dthh[, keyvars, with = FALSE])
+generate_key <- function(dthh, keyvars = c("V10", "V101", "V102", "V103", "V106")) {
+  vkey <- Reduce(function(x,y) paste(x, y, sep = "-"),
+                 dthh[, keyvars, with = FALSE])
+  vna <- Reduce(function(x,y) x | y,
+                lapply(dthh[, keyvars, with = FALSE], is.na))
+
+  vkey[vna] <- NA_character_
+
+  return(vkey)
 }
 
 #+end_src
@@ -23,7 +329,7 @@ So, for example,
 
 #+begin_src R :session :colnames yes :rownames yes :eval false
 
-hh95[, hhid := generate_key(.SD)]
+hh95[, hhid := generate_key(.SD, c("UF", "V101", "V102", "V103", "V106"))]
 
 hh95[1:5, .(UF, V101, V102, V103, V106, hhid)] # show selected rows
 
@@ -120,6 +426,35 @@ pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][orde
 | 29-45-29001030-9-3 |                3 |
 |   33-12-332127-1-4 |                2 |
 |   43-12-432164-2-4 |                1 |
+
+
+
+** Combining ~person~ and ~household~ generally
+
+The key to combine person and household is to use the columns:
+| Column              | Meaning                             | Availability 80s  | Availability 90s  |
+|---------------------+-------------------------------------+-------------------+-------------------|
+| UF [.state]         |                                     | household, person | household, person |
+| MES [V(105, 2002?)] |                                     | household         | household, person |
+| V102                | survey area code                    | household         | household, person |
+| V103                | household number within survey area | household         | household, person |
+
+A few things to be decided:
+1. Which column to be used as month? V105, probably?
+
+#+begin_src R :session :results silent
+
+hhkey1 <- c(".state", "V101", "V102", "V103", "V106")
+hhkey2 <- c(".state", "V101", "V102", "V103", "V106")
+
+hhkey2 <- c("UF", "MÊS", "V102", "V103")
+
+hh_old[, hhid := generate_key(.SD, hhkey1)]
+
+1
+
+#+end_src
+
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
 *** Issue
@@ -152,9 +487,6 @@ DT <- data.table::fread(file.path(pme_dir, "person-2000.csv"))
 DT[V500 != ""][, .N] /  DT[.state == "BA"][,.N]
     #+end_src
 
-    #+RESULTS:
-    : 0.134287044701987
-
     - note that ~fread~ automatically trims whitespaces, so this finds all instances in which ~V500~ is different than whitespace
 
 ** [2021-06-01 Tue] Non-empty entries of V500 in PME 1999
@@ -179,7 +511,7 @@ DT[, .(prop = sum(V500 != "") / .N), .state]
     | SP |  0.228151288335431 |
 
 - However, the associated entries don't seem (from eyeballing) too weird. For example, the weights associated with problematic entries are within the range of other entries (this is important because the weight entries come after ~V500~)
-** [2021-06-03 Thu] Impossibility of identifying person to household in PME99-2k
+** [2021-06-03 Thu] Apparent impossibility of identifying person to household in PME99-2k
 <<sec:issue-identify-people-household>>
 The identifiers of households (at least according to Ribas and Soares, 2008) in the OLD PME is the following:
 
@@ -200,11 +532,6 @@ However, variables ~V101~, ~V106~ aren't not available on persons databases!
 Of the variables above, only ~V10~ [UF], ~V102~ and ~V103~ are available. But that is not sufficient to uniquely identify households:
 
 #+begin_src R :session
-library(data.table)
-pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
-
-hh95 <- fread(file.path(pme_dir, "household-1995.csv"))
-pp95 <- fread(file.path(pme_dir, "person-1995.csv"))
 
 ## Create household IDs including / excluding V101 & V106
 hh95[, `:=`(hhid1 = paste(UF, V101, V102, V103, V106, sep = "-"),
@@ -325,8 +652,76 @@ hh_all[, .(nobs = .N), .(hhid2, ANO)][, .(freq = .N), .(nobs, ANO)]
 |    1 | 2000 | 489365 |
 
 Interpreted as: "for each ~ANO~, there is a single entry per ~hhid2~"
+** [2021-06-10 Thu] Weird values in column V10 for years 88-90
+
+#+begin_src R :session :colnames yes
+
+countby(hh_old[.year %in% c(1988, 1989, 1990)], .x = ".state", bycols = c("V10"))[[1]]
+
+#+end_src
+
+#+RESULTS:
+| V10 | .state = BA | .state = MG | .state = PE | .state = RJ | .state = RS | .state = SP |
+|-----+-------------+-------------+-------------+-------------+-------------+-------------|
+|  11 |           0 |           0 |           0 |      273526 |           0 |           0 |
+|  12 |           0 |           0 |           0 |        3986 |           0 |           0 |
+|  13 |           0 |           0 |           0 |        1559 |           0 |           0 |
+|  14 |           0 |           0 |           0 |        2424 |           0 |           0 |
+|  21 |           0 |           0 |           0 |           0 |           0 |      272683 |
+|  22 |           0 |           0 |           0 |           0 |           0 |        3228 |
+|  23 |           0 |           0 |           0 |           0 |           0 |         985 |
+|  24 |           0 |           0 |           0 |           0 |           0 |        1669 |
+|  25 |           0 |           0 |           0 |           0 |           0 |        1714 |
+|  26 |           0 |           0 |           0 |           0 |           0 |         847 |
+|  27 |           0 |           0 |           0 |           0 |           0 |         344 |
+|  28 |           0 |           0 |           0 |           0 |           0 |        1006 |
+|  29 |           0 |           0 |           0 |           0 |           0 |         333 |
+|  33 |           0 |           0 |           0 |           0 |      222620 |           0 |
+|  34 |           0 |           0 |           0 |           0 |        5439 |           0 |
+|  35 |           0 |           0 |           0 |           0 |        3651 |           0 |
+|  41 |           0 |      223409 |           0 |           0 |           0 |           0 |
+|  42 |           0 |        3099 |           0 |           0 |           0 |           0 |
+|  56 |           0 |           0 |      176931 |           0 |           0 |           0 |
+|  59 |      165541 |           0 |           0 |           0 |           0 |           0 |
+|  60 |         542 |           0 |           0 |           0 |           0 |           0 |
+** [2021-06-11 Fri] Month columns in persons datasets: availability and weird values
+Let's create a variable that flags whether month is:
+1. Within reasonable range
+2. NA
+3. Outside reasonable range
+
+#+begin_src R :session :colnames yes
+pp_old[MÊS %in% seq(1, 12), .flmonth := 0 ]
+pp_old[is.na(MÊS), .flmonth := 1 ]
+pp_old[is.na(.flmonth), .flmonth := 2] # none of the above
+
+countby(pp_old, ".flmonth", ".year")[[1]]
+#+end_src
+
+#+RESULTS:
+| .year | .flmonth = 0 | .flmonth = 1 | .flmonth = 2 |
+|-------+--------------+--------------+--------------|
+|  1984 |            0 |      1396109 |            0 |
+|  1985 |            0 |      1390684 |            0 |
+|  1986 |            0 |      1395301 |            0 |
+|  1987 |            0 |      1395818 |            0 |
+|  1988 |            0 |      1252766 |            0 |
+|  1989 |            0 |      1061684 |            0 |
+|  1990 |            0 |      1084312 |            0 |
+|  1991 |      1096907 |            0 |            0 |
+|  1992 |      1049652 |            0 |            0 |
+|  1993 |      1058058 |            0 |            0 |
+|  1994 |      1077149 |            0 |            0 |
+|  1995 |      1084463 |            0 |            0 |
+|  1996 |      1086939 |            0 |            0 |
+|  1997 |      1099255 |            0 |            0 |
+|  1998 |      1110199 |            0 |            0 |
+|  1999 |      1100798 |            0 |            0 |
+|  2000 |       995819 |           35 |          810 |
+
+
 * Tasks
-** Identify people and households
+** STRT Identify people and households
 - In old PME, had previously used variable ~V1~ to identify household, which was apparently completely wrong
 - However, found ~Ribas, R. P., & Soares, S. S. D., Sobre o painel da pesquisa mensal de emprego (pme) do ibge (2008).~
 - They say that in order to identify households, one needs to use the following variables:
@@ -340,7 +735,6 @@ Interpreted as: "for each ~ANO~, there is a single entry per ~hhid2~"
   | v063     | Grupo rotacional | v106 |
 
 - About old PME there are conflicting pieces of information: they say the following should be used
-
 
 ** Ideal variable selection
 
