@@ -722,6 +722,11 @@ countby(pp_old, ".flmonth", ".year")[[1]]
 |  2000 |       995819 |           35 |          810 |
 
 
+So we conclude that, in the case of *person* data:
+
+1. In years <= 1990, there is no month column
+2. In years 91-2k, there are minor issues, probably not worth losing sleep over 845 observations.
+
 * Tasks
 ** STRT Identify people and households
 - In old PME, had previously used variable ~V1~ to identify household, which was apparently completely wrong
