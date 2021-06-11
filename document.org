@@ -70,6 +70,7 @@ For years 1984-1990, state is present in column V10. The values were supposed to
 | SP    |   21 |
 | RS    |   33 |
 | MG    |   41 |
+| PA    |   56 |
 | BA    |   59 |
 
 After 1990, the codes change to
@@ -122,7 +123,7 @@ Create a flag for that: note that ~oldpme_flag_bad_state~ *has side-effects*.
 #+begin_src R :session :tangle lib_oldpme.r :results silent
 
 oldpme_flag_bad_state <- function(hh_old, flagname = ".flbadstate") {
-  valid_states_V10 <- c(11, 21, 33, 41, 59)
+  valid_states_V10 <- c(11, 21, 33, 41, 56, 59)
   valid_states_UF <- c(26, 29, 31, 33, 35, 43)
 
   hh_old[!is.na(V10), (flagname) := !(V10 %in% valid_states_V10)]
@@ -145,13 +146,13 @@ countby(hh_old, .x = ".flbadstate", bycols = ".year")[[1]]
 #+RESULTS:
 | .year | .flbadstate = FALSE | .flbadstate = TRUE |
 |-------+---------------------+--------------------|
-|  1984 |              469618 |              74170 |
-|  1985 |              483076 |              76673 |
-|  1986 |              485892 |              75088 |
-|  1987 |              485919 |              74906 |
-|  1988 |              432525 |              75872 |
-|  1989 |              359378 |              64975 |
-|  1990 |              365876 |              66910 |
+|  1984 |              543788 |                  0 |
+|  1985 |              559749 |                  0 |
+|  1986 |              560980 |                  0 |
+|  1987 |              560825 |                  0 |
+|  1988 |              498555 |               9842 |
+|  1989 |              414260 |              10093 |
+|  1990 |              421895 |              10891 |
 |  1991 |              445988 |                  0 |
 |  1992 |              449351 |                  0 |
 |  1993 |              447479 |                  0 |
