@@ -431,13 +431,14 @@ pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][orde
 
 ** Combining ~person~ and ~household~ generally
 
-The key to combine person and household is to use the columns:
-| Column              | Meaning                             | Availability 80s  | Availability 90s  |
-|---------------------+-------------------------------------+-------------------+-------------------|
-| UF [.state]         |                                     | household, person | household, person |
-| MES [V(105, 2002?)] |                                     | household         | household, person |
-| V102                | survey area code                    | household         | household, person |
-| V103                | household number within survey area | household         | household, person |
+The key to combine person and household is to use the columns (see [[sec:issue-identify-people-household]]):
+| Column       | Meaning                             | Availability 80s  | Availability 90s  |
+|--------------+-------------------------------------+-------------------+-------------------|
+| UF [.state]  |                                     | household, person | household, person |
+| ANO [.year ] | year                                | household, person | household, person |
+| MES [V(105)] |                                     | household         | household, person |
+| V102         | survey area code                    | household         | household, person |
+| V103         | household number within survey area | household         | household, person |
 
 A few things to be decided:
 1. Which column to be used as month? V105, probably?
