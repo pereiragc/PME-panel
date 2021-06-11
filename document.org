@@ -490,6 +490,7 @@ DT[V500 != ""][, .N] /  DT[.state == "BA"][,.N]
     - note that ~fread~ automatically trims whitespaces, so this finds all instances in which ~V500~ is different than whitespace
 
 ** [2021-06-01 Tue] Non-empty entries of V500 in PME 1999
+According to PME, the value of ~V500~ should be all space characters; since ~fread~ trims whitespaces by default, and empty string is treated as missing, this means that ~V500~ should be read as a column of missing values.
 *** Analysis
 - That now happens across states
     #+begin_src R
@@ -685,7 +686,7 @@ countby(hh_old[.year %in% c(1988, 1989, 1990)], .x = ".state", bycols = c("V10")
 |  59 |      165541 |           0 |           0 |           0 |           0 |           0 |
 |  60 |         542 |           0 |           0 |           0 |           0 |           0 |
 ** [2021-06-11 Fri] Month columns in persons datasets: availability and weird values
-Let's create a variable that flags whether month is:
+Let's create a variable that flags whether month (as in V105, not V2002) is:
 1. Within reasonable range
 2. NA
 3. Outside reasonable range
