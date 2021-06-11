@@ -274,14 +274,14 @@ Now, how do V105 and V2002 compare? Notes:
 
 1. They're definitely not the same:
 
-#+begin_src R :session :colnames yes
-hh_old[, sum(V105 != V2002, na.rm = TRUE)]
-#+end_src
+   #+begin_src R :session :colnames yes
+   hh_old[, sum(V105 != V2002, na.rm = TRUE)]
+   #+end_src
 
-#+RESULTS:
-|      x |
-|--------|
-| 569170 |
+   #+RESULTS:
+   |      x |
+   |--------|
+   | 569170 |
 
 2. The difference only exists when the interview is conducted in the early days of the month (day of the month is variable ~V2001~)
     #+begin_src R :session :colnames yes
