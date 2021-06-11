@@ -275,7 +275,7 @@ Now, how do V105 and V2002 compare? Notes:
 1. They're definitely not the same:
 
    #+begin_src R :session :colnames yes
-   hh_old[, sum(V105 != V2002, na.rm = TRUE)]
+hh_old[, sum(V105 != V2002, na.rm = TRUE)]
    #+end_src
 
    #+RESULTS:
@@ -441,20 +441,66 @@ The key to combine person and household is to use the columns (see [[sec:issue-i
 | V103         | household number within survey area | household         | household, person |
 
 A few things to be decided:
-1. Which column to be used as month? V105, probably?
+1. Which column to be used as month? ~V105~, probably?
+   - Since only ~V105~ shows up for persons dataset, there would be no hope if we used ~V2002~ instead.
+2. What about years <= 1990?
+   - We can take advantage of the fact that those years had the ~household person person ...~ format, so that the line in the file (kept in variable ~n_entry~) identifies people with a household record.
+   - There are two ways of matching:
+     1. Use the ~n_entry~ variable directly, or
+     2. Recover ~V102~ and ~V103~ with ~n_entry~, then use the key above to recover the household id.
 
+
+First, set the household key in the household dataset:
 #+begin_src R :session :results silent
+keyhh <- c(".state", "V101", "V102", "V103", "V106")
 
-hhkey1 <- c(".state", "V101", "V102", "V103", "V106")
-hhkey2 <- c(".state", "V101", "V102", "V103", "V106")
-
-hhkey2 <- c("UF", "MÊS", "V102", "V103")
-
-hh_old[, hhid := generate_key(.SD, hhkey1)]
+hh_old[, hhid := generate_key(.SD, keyhh)]
 
 1
-
 #+end_src
+
+Below:
+- use ~n_entry~ when available to recover ~V105~, ~V102~, ~V103~, ~hhid~.
+  + theoretically, we would not need to go farther than this.
+  + however, I want to compare the ~hhid~ obtained in such a way with the one obtained by generating the key
+- So I generate the key that is used to merge people and households (which will be the method for 1991 onward)
+- Finally, I use the person-household key to obtain another version of the household ID
+
+#+begin_src R :session
+pp_old[hh_old[!is.na(n_entry)], `:=`(
+           V105m = V105,
+           V102m = i.V102,
+           V103m = i.V103,
+           hhidx = hhid
+), on = .(.state, .year, n_entry)]
+
+pp_old[, hh_pp_id  := generate_key(.SD, c(".state", ".year", "V105m", "V102m", "V103m"))]
+hh_old[, hh_pp_id := generate_key(.SD, c(".state", ".year", "V105", "V102", "V103"))]
+
+pp_old[hh_old, hhidy := hhid, on = .(hh_pp_id)]
+
+1
+#+end_src
+
+#+RESULTS:
+: 1
+
+A few notes:
+- since ~V102~ exists in persons datasets after 1990, I have to use ~i.V102~ to indicate that I want the one coming from ~hh_old~. If I used ~V102m = V102~, I'd pull from ~pp_old~, which would be a vector of missing values!
+- I append "x" to "hhid" because I will compare with another join method.
+- The ~n_entry~ identifies rows only up to year and state (since there is a single file per year/state in the 1980s)
+
+
+So: are the IDs the same?
+
+#+begin_src R :session :colnames yes
+pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
+#+end_src
+
+#+RESULTS:
+| different_ids_count |
+|---------------------|
+|                   0 |
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
