@@ -429,8 +429,7 @@ pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][orde
 |   43-12-432164-2-4 |                1 |
 
 
-
-** Combining ~person~ and ~household~ generally
+** Combining ~person~ and ~household~ pre-1990
 
 The key to combine person and household is to use the columns (see [[sec:issue-identify-people-household]]):
 | Column       | Meaning                             | Availability 80s  | Availability 90s  |
@@ -451,7 +450,7 @@ A few things to be decided:
      2. Recover ~V102~ and ~V103~ with ~n_entry~, then use the key above to recover the household id.
 
 
-First, set the household key in the household dataset:
+First, set the household key in the household dataset (doing that for all years anyway):
 #+begin_src R :session :results silent
 keyhh <- c(".state", "V101", "V102", "V103", "V106")
 
@@ -503,20 +502,16 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 |---------------------|
 |                   0 |
 
-Great! Now we combine households and persons in the 1991-2k range.
 
-#+begin_src R :session :results silent
+YES!
+** Combining ~person~ and ~household~ for all old PME years
 
-pp_old[is.na(n_entry), `:=`(
-                         V105m = MÊS,
-                         V102m = V102,
-                         V103m = V103
-                       )]
-1
+In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
+
+
+#+begin_src R :session
+
 #+end_src
-
-Note that there is a problem with entries in ~.year == 2000~ generating weird month values, as documented in [[sec:weird_months]]. So
-
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
