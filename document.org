@@ -503,6 +503,21 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 |---------------------|
 |                   0 |
 
+Great! Now we combine households and persons in the 1991-2k range.
+
+#+begin_src R :session :results silent
+
+pp_old[is.na(n_entry), `:=`(
+                         V105m = MÊS,
+                         V102m = V102,
+                         V103m = V103
+                       )]
+1
+#+end_src
+
+Note that there is a problem with entries in ~.year == 2000~ generating weird month values, as documented in [[sec:weird_months]]. So
+
+
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
 *** Issue
@@ -734,6 +749,8 @@ countby(hh_old[.year %in% c(1988, 1989, 1990)], .x = ".state", bycols = c("V10")
 |  59 |      165541 |           0 |           0 |           0 |           0 |           0 |
 |  60 |         542 |           0 |           0 |           0 |           0 |           0 |
 ** [2021-06-11 Fri] Month columns in persons datasets: availability and weird values
+<<sec:weird_months>>
+
 Let's create a variable that flags whether month (as in V105, not V2002) is:
 1. Within reasonable range
 2. NA
@@ -771,8 +788,28 @@ countby(pp_old, ".flmonth", ".year")[[1]]
 
 So we conclude that, in the case of *person* data:
 
-1. In years <= 1990, there is no month column
+1. In years <= 1990, there is no month column (=> need to be recovered from household data)
 2. In years 91-2k, there are minor issues, probably not worth losing sleep over 845 observations.
+3. Also worth noting that in /household/ data, ~V105~/~MÊS~ are all "reasonable":
+   #+begin_src R :session :colnames yes
+countby(hh_old, .x = "MÊS", bycols = "V105")[[1]]
+   #+end_src
+
+   #+RESULTS:
+   | V105 | MÊS = NA | MÊS = 1 | MÊS = 2 | MÊS = 3 | MÊS = 4 | MÊS = 5 | MÊS = 6 | MÊS = 7 | MÊS = 8 | MÊS = 9 | MÊS = 10 | MÊS = 11 | MÊS = 12 |
+   |------+----------+---------+---------+---------+---------+---------+---------+---------+---------+---------+----------+----------+----------|
+   |    1 |   300087 |  382847 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    2 |   301355 |       0 |  383297 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    3 |   303433 |       0 |       0 |  383251 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    4 |   303617 |       0 |       0 |       0 |  384004 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    5 |   306035 |       0 |       0 |       0 |       0 |  384469 |       0 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    6 |   305578 |       0 |       0 |       0 |       0 |       0 |  384447 |       0 |       0 |       0 |        0 |        0 |        0 |
+   |    7 |   306055 |       0 |       0 |       0 |       0 |       0 |       0 |  384388 |       0 |       0 |        0 |        0 |        0 |
+   |    8 |   292009 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |  384413 |       0 |        0 |        0 |        0 |
+   |    9 |   293006 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |  384251 |        0 |        0 |        0 |
+   |   10 |   293008 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |   385446 |        0 |        0 |
+   |   11 |   293209 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |   385811 |        0 |
+   |   12 |   293486 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |   386735 |
 
 * Tasks
 ** STRT Identify people and households
