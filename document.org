@@ -805,6 +805,117 @@ countby(hh_old, .x = "MÊS", bycols = "V105")[[1]]
    |   10 |   293008 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |   385446 |        0 |        0 |
    |   11 |   293209 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |   385811 |        0 |
    |   12 |   293486 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |        0 |        0 |   386735 |
+** [2021-06-13 Sun] Malformed ~V102~ in persons datasets
+<<sec:flag_v102>>
+
+In old PME, variable ~V102~ is necessary to merge people and households, and to identify households / people over time.
+
+In =pme1991-2000.doc=, variable ~V102~ has the following description:
+
+#+begin_quote
+Identifica o código da área de pesquisa.
+Até 11/1995, o número de controle possuía 6 dígitos. A partir daí, passou a ter 8 dígitos. Para compatibilização com as pesquisas mais novas, tornando possível apenas uma descrição do registro num programa de acesso aos dados, o número de controle com 6 dígitos recebe dois espaços após o mesmo, ficando com 8 posições, mantendo-se o mesmo lay-out do registro, independente do ano.
+#+end_quote
+
+
+Note that we do see that pattern:
+
+#+begin_src R :session :colnames yes
+hh_old[.year <= 1994, .(number_digits = unique(nchar(as.character(V102))))]
+#+end_src
+
+#+RESULTS:
+| number_digits |
+|---------------|
+|             6 |
+
+
+#+begin_src R :session :colnames yes
+hh_old[.year >= 1996, .(number_digits = unique(nchar(as.character(V102))))]
+#+end_src
+
+#+RESULTS:
+| number_digits |
+|---------------|
+|             8 |
+
+Of course, 1995 should have both types (due to staggered waves). HOwever, in the person dataset, it's kinda horrible.
+
+1. ~data.table::fread~ reads the column as character, indicating something wrong.
+   #+begin_src R :session
+pp_old[, typeof(V102)]
+   #+end_src
+
+   #+RESULTS:
+   : character
+
+2. A regular expression shows entries without proper format:
+
+   #+begin_src R :session
+n_proper <- pp_old[grepl("\\d{6,8}", V102), .N]
+n_non_na <- pp_old[!is.na(V102), .N]
+
+n_proper/n_non_na
+   #+end_src
+
+   #+RESULTS:
+   : 0.999992565113804
+
+   nearly all of the dataset has the proper format. I create a function to flag that.
+
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+oldpme_flag_V102 <- function(pp_old) {
+   pp_old[is.na(V102), .fl102 := 1]
+   pp_old[!is.na(V102), .fl102 := ifelse(grepl("\\d{6,8}", V102), 0, 2)]
+}
+#+end_src
+
+
+Here is the flag documentation:
+
+| Flag | Meaning                               |
+|------+---------------------------------------|
+|    0 | Non-missing V102 with proper format   |
+|    1 | NA V102                               |
+|    2 | Non-missing V102 with improper format |
+
+
+
+
+
+** [2021-06-13 Sun] Recycling of household IDs
+
+Let's examine the household identified with ~hhid~ "MG-142-411930-10-3":
+
+#+begin_src R :session :colnames yes
+hh_old[hhid ==  "MG-142-411930-10-3",
+       .(hhid, .state, day = V2001, month = V2002, year = .year,
+         npeople = V109, npeople_gt10yo = V110)]
+#+end_src
+
+#+RESULTS:
+| hhid               | .state | day | month | year | npeople | npeople_gt10yo |
+|--------------------+--------+-----+-------+------+---------+----------------|
+| MG-142-411930-10-3 | MG     |  16 |    11 | 1986 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  21 |    12 | 1986 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  25 |     1 | 1987 |       0 |              0 |
+| MG-142-411930-10-3 | MG     |  22 |     2 | 1987 |       0 |              0 |
+| MG-142-411930-10-3 | MG     |  15 |    11 | 1987 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  20 |    12 | 1987 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  24 |     1 | 1988 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  21 |     2 | 1988 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  22 |     7 | 1990 |       2 |              2 |
+| MG-142-411930-10-3 | MG     |  26 |     8 | 1990 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  23 |     9 | 1990 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  21 |    10 | 1990 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  21 |     7 | 1991 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  25 |     8 | 1991 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  22 |     9 | 1991 |       3 |              3 |
+| MG-142-411930-10-3 | MG     |  20 |    10 | 1991 |       3 |              3 |
+
+
+
 
 * Tasks
 ** STRT Identify people and households
