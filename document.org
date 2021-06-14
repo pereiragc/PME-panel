@@ -57,6 +57,8 @@ pp95 <- fread(file.path(.pme_dir, "person-1995.csv"))
 pp_old <- rbindlist(lapply(oldpmeread("person"), function(ll) ll$DT), fill = TRUE)
 hh_old <- rbindlist(lapply(oldpmeread("household"), function(ll) ll$DT), fill = TRUE)
 
+1
+
 #+end_src
 
 ** Checking for issues
@@ -720,16 +722,17 @@ Os pesos para expansão das amostras da PME são obtidos pela razão entre a est
 
 (Free translation: "expansion weights = estimate of resident population / total of dwellers in sample [V109]; weights are unique by MSU and vary each survey month")
 
-
-
-
-
-
-#+begin_src R :session
-dtnppl <- hh_old[, .(estimate_pop = unique(V600)[1],
+#+begin_src R :session :results file graphics :file output/weights_comparison.png
+dtnppl <- hh_old[!is.na(.weight), .(estimate_pop = unique(V600)[1],
                      total_ppl_sample = sum(V109, na.rm = TRUE),
-                     given_weight = PESOm[1]), .(.year, .state, V105)]
+                     .weight = .weight[1]), .(.year, .state, V105)]
+
+
+dtnppl[, .(x = estimate_pop / total_ppl_sample, y = .weight)][, plot(x, y)]
+
 #+end_src
+
+#+RESULTS:
 
 
 * Issues
