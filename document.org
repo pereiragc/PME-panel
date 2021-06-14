@@ -1,6 +1,6 @@
 #+TITLE: Documentation
 
-* Building the PME panel
+* Building the old PME panel
 ** Load data
 Below is a convenience function for loading PME data into memory. You can specify unit to be "person", "household", or any other string (which will load both). The timeframe can be 80s, 90s or both (by again specifying any other string.)
 
