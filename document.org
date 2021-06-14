@@ -982,11 +982,8 @@ hh_old[hhid ==  "MG-142-411930-10-3",
 | MG-142-411930-10-3 | MG     |  22 |     9 | 1991 |       3 |              3 |
 | MG-142-411930-10-3 | MG     |  20 |    10 | 1991 |       3 |              3 |
 
-
-
-
 * Tasks
-** STRT Identify people and households
+** DONE Identify people and households
 - In old PME, had previously used variable ~V1~ to identify household, which was apparently completely wrong
 - However, found ~Ribas, R. P., & Soares, S. S. D., Sobre o painel da pesquisa mensal de emprego (pme) do ibge (2008).~
 - They say that in order to identify households, one needs to use the following variables:
