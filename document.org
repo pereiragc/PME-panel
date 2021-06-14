@@ -1003,7 +1003,8 @@ hh_old[hhid ==  "MG-142-411930-10-3",
 *** DONE Investigate quality of household/person match using number of people in household
 ** TODO Track people over time
 - In order for me to do that, I need to have date of birth, age and sex
-** TODO Old PME weighting scheme: how to compute totals
+** TODO Old PME: how to get weights
+** TODO Old PME: how to compute totals using weights
 - Let $y_{j}$ be the *total* of a variable within MSU ~j~
   + the total should be computed by simply summing all instances without any weighting
 - Let $f_{j}$ be the sampling fraction for MSU
@@ -1016,10 +1017,14 @@ hh_old[hhid ==  "MG-142-411930-10-3",
     | Belo Horizonte | MG                  | 1/100             |
     | Recife         | PB                  | 1/100             |
     | Salvador       | BA                  | 1/100             |
+  + In the 1990 documentation file, I see the following quote
+    #+begin_quote
+Os pesos para expansão das amostras da PME são obtidos pela razão entre a estimativa de população residente e o total de moradores (V109) obtido na amostra da PME. O peso é único por região metropolitana e varia a cada mês de pesquisa.
+    #+end_quote
+
 
 - Then estimate of total is simply $\hat  Y_{j} = (1 / f_{j}) \hat y_{j}$
   + where $\hat y_{j}$ is the simple sum over characteristic $y$ over people within MSU $j$
-
 
 
 ** Relevant variables and how to find them
