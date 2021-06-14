@@ -1,4 +1,5 @@
 #+TITLE: Documentation
+#+AUTHOR: Gustavo Pereira
 
 * Building the old PME panel
 ** Load data
@@ -1109,8 +1110,6 @@ Here is the flag documentation:
 
 
 
-
-
 ** [2021-06-13 Sun] Recycling of household IDs
 
 Let's examine the household identified with ~hhid~ "MG-142-411930-10-3":
@@ -1282,6 +1281,32 @@ countby(pp_old, ".flag_weight", c(".state", ".year"))[[1]]
   | SP     |  1998 |           224623 |                0 |                0 |
   | SP     |  1999 |           226455 |                0 |                0 |
   | SP     |  2000 |           224829 |                0 |                0 |
+** [2021-06-14 Mon] Absent weights for 1984-1990
+
+- It's unfortunate that we don't have weights in the 1984-1990 period. We also don't have population estimates that would allow us to compute the weights.
+
+  #+begin_src R :session
+hh_old[.year <= 1990, unique(V600)] # pop. estimate
+  #+end_src
+
+  #+RESULTS:
+
+  #+begin_src R :session
+pp_old[.year <= 1990, unique(PESO)]
+  #+end_src
+
+  #+RESULTS:
+
+
+- The only reference I have found for that period is the methodology [[file:docs/PME-80-methodology.pdf][document]] which mentions the table
+  | MSU            | State (my addition) | Sampling fraction |
+  |----------------+---------------------+-------------------|
+  | Rio de Janeiro | RJ                  | 1/200             |
+  | Sao Paulo      | SP                  | 1/300             |
+  | Porto Alegre   | RS                  | 1/100             |
+  | Belo Horizonte | MG                  | 1/100             |
+  | Recife         | PE                  | 1/100             |
+  | Salvador       | BA                  | 1/100             |
 
 * Tasks
 ** DONE Identify people and households
@@ -1313,7 +1338,7 @@ countby(pp_old, ".flag_weight", c(".state", ".year"))[[1]]
     | Sao Paulo      | SP                  | 1/300             |
     | Porto Alegre   | RS                  | 1/100             |
     | Belo Horizonte | MG                  | 1/100             |
-    | Recife         | PB                  | 1/100             |
+    | Recife         | PE                  | 1/100             |
     | Salvador       | BA                  | 1/100             |
   + In the 1990 documentation file, I see the following quote
     #+begin_quote
@@ -1323,7 +1348,6 @@ Os pesos para expansão das amostras da PME são obtidos pela razão entre a est
 
 - Then estimate of total is simply $\hat  Y_{j} = (1 / f_{j}) \hat y_{j}$
   + where $\hat y_{j}$ is the simple sum over characteristic $y$ over people within MSU $j$
-
 
 ** Relevant variables and how to find them
 
