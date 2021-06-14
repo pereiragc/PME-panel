@@ -580,6 +580,54 @@ Breaking down what I do above:
      + That becomes ~nppl_gt10yo~
 
 - I then test for how many household IDs are ~impl_nppl~ and ~nppl_gt10yo~ different and find a single instance of that anomaly
+** Weights in PME
+
+The first thing I do is to come up with a function that tries to reasonably
+recover weights from messy data.
+
+I take each state/year/month and select the "integer-like value" [see the
+regular expression in the function] that shows up most often.
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+oldpme_getweights <- function(pp_old, newcname = "PESOm") {
+  # pp_old[, (newcname) := ifelse(grepl("^\\d+$", PESO), as.integer(PESO), NA)]
+
+  dtw0 <- pp_old[!is.na(PESO), .(.w = as.integer(grep("^\\d+$", PESO, value = TRUE)),
+                     N = .N),
+                 .(.year, .state, V105)]
+
+  dtw0[, .freq := .N, .(.year, .state, V105, .w)]
+
+  anomalous_years <- paste(dtw0[.freq != N, unique(.year)], collapse = ", ")
+
+  if (!(length(anomalous_years) == 0)) {
+    message(glue::glue("Found anomalies in years {anomalous_years}"))
+  }
+
+  dtw0[, .(.w = .w[which.max(.freq)]), .(.year, .state, V105)]
+}
+#+end_src
+
+
+Now, I want to test whether the construction of weights follows this quote:
+
+#+begin_quote
+Os pesos para expansão das amostras da PME são obtidos pela razão entre a estimativa de população residente e o total de moradores (V109) obtido na amostra da PME. O peso é único por região metropolitana e varia a cada mês de pesquisa.
+#+end_quote
+(Free translation: "expansion weights = estimate of resident population / total of dwellers in sample [V109]; weights are unique by MSU and vary each survey month")
+
+#+begin_src R :session :results silent
+
+dtweights <- pp_old[, .(weight = PESOm[1]), .(.year, .state, V105)]
+
+#+end_src
+
+#+begin_src R :session
+dtnppl <- hh_old[, .(estimate_pop = unique(V600)[1],
+                     total_ppl_sample = sum(V109, na.rm = TRUE),
+                     given_weight = PESOm[1]), .(.year, .state, V105)]
+#+end_src
+
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
