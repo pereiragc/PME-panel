@@ -502,16 +502,86 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 |---------------------|
 |                   0 |
 
-
 YES!
 ** Combining ~person~ and ~household~ for all old PME years
 
 In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
 
 
-#+begin_src R :session
+First, I remove the columns I created while exploring the keying in the above sections.
+#+begin_src R :session :results silent
+pp_old[, c("hh_pp_id", "hhidx", "hhidy", "V105m", "V102m", "V103m") := NULL]
+hh_old[, c("hh_pp_id", "hhid"):= NULL]
 
+1
 #+end_src
+
+
+Let me try now to apply my combined wisdom:
+
+1. I can easily create a household ID
+
+   #+begin_src R :session :results silent
+hh_old[, hhid := generate_key(.SD, c(".state", "V101", "V102", "V103", "V106"))]
+1
+   #+end_src
+
+2. For ~1984 <= yyyy <= 1990~, I can simply use the entry number to recover household id in person dataset.
+
+   #+begin_src R :session :results silent
+pp_old[hh_old[!is.na(n_entry)], `:=`(hhid = hhid, V105 = V105),
+       on = .(.state, .year, n_entry)]
+1
+   #+end_src
+
+3. As far as the new years are concerned, there is an issue with V102 documented in [[sec:flag_v102]] that needs to be dealt with.
+
+   #+begin_src R :session :results silent
+pp_old[!grepl("\\d{6,8}", V102), V102 := NA_character_]
+pp_old[, V102 := as.integer(V102)]
+1
+   #+end_src
+
+4. For the other years, I use the variables in [[sec:combine_hh_pp_algo]] in order to fetch the id.
+
+   (In order for me to do that, I first have to match the column ~V105~ name
+   [ ~MÊS => V105~ ].)
+   #+begin_src R :session :results silent
+pp_old[is.na(n_entry), V105 := MÊS][]
+1
+   #+end_src
+
+
+   #+begin_src R :session :results silent
+pp_old[hh_old[is.na(n_entry)], hhid := i.hhid,
+       on = .(.year, .state, V105, V102, V103)]
+1
+   #+end_src
+
+*** Sanity check with number of people in household
+
+#+begin_src R :session
+dt_test <- hh_old[pp_old[, .(implied_n_people = length(unique(V201))),
+                         .(.year, hhid, V105)],
+                  .(hhid, nppl_gt10yo = V110, impl_nppl = implied_n_people),
+                  on = .(hhid, .year, V105)]
+
+dt_test[, sum(impl_nppl != nppl_gt10yo, na.rm= TRUE)]
+#+end_src
+
+#+RESULTS:
+: 1
+
+Breaking down what I do above:
+
+- For each (household ID, year, month) triple, I:
+  1. Use "person" dataset to compute the implied number of people by going on that year/month/hhid and fetching the length of ~V201~ [the "person number" column]
+
+     + That becomes ~impl_nppl~
+  2. Use the variable ~V110~ from the household dataset which counts the number of people above 10 years old in the household in the year/month
+     + That becomes ~nppl_gt10yo~
+
+- I then test for how many household IDs are ~impl_nppl~ and ~nppl_gt10yo~ different and find a single instance of that anomaly
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
@@ -932,7 +1002,7 @@ hh_old[hhid ==  "MG-142-411930-10-3",
   | v063     | Grupo rotacional | v106 |
 
 - About old PME there are conflicting pieces of information: they say the following should be used
-
+*** DONE Investigate quality of household/person match using number of people in household
 ** Ideal variable selection
 
 |---------------------|
