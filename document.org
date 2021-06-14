@@ -504,9 +504,7 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 
 YES!
 ** Combining ~person~ and ~household~ for all old PME years
-
 In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
-
 
 First, I remove the columns I created while exploring the keying in the above sections.
 #+begin_src R :session :results silent
@@ -1003,15 +1001,53 @@ hh_old[hhid ==  "MG-142-411930-10-3",
 
 - About old PME there are conflicting pieces of information: they say the following should be used
 *** DONE Investigate quality of household/person match using number of people in household
-** Ideal variable selection
+** TODO Track people over time
+- in order for me to do that, I need to have date of birth, age and sex
+** TODO Old PME weighting scheme
 
-|---------------------|
-| Household ID        |
-| Person ID           |
-| State               |
-| Age                 |
-| Sex                 |
-| Education           |
-| Labor market status |
-| Occupation          |
-| Sector              |
+- Let $y_{j}$ be the *total* of a variable within MSU ~j~
+  + the total should be computed by simply summing all instances without any weighting
+- Let $f_{j}$ be the sampling fraction for MSU
+  + In the 1980 methodology document, I see a table with the following numbers
+    | MSU            | State (my addition) | Sampling fraction |
+    |----------------+---------------------+-------------------|
+    | Rio de Janeiro | RJ                  | 1/200             |
+    | Sao Paulo      | SP                  | 1/300             |
+    | Porto Alegre   | RS                  | 1/100             |
+    | Belo Horizonte | MG                  | 1/100             |
+    | Recife         | PB                  | 1/100             |
+    | Salvador       | BA                  | 1/100             |
+- Then estimate is simply $\hat  Y_{j} = (1 / f_{j}) \hat y_{j}$
+
+
+
+** Relevant variables and how to find them
+
+|                                     | Old: 1984-2000             |
+|-------------------------------------+----------------------------|
+| Household ID                        | -                          |
+| Sex                                 | V202                       |
+| Age                                 | V{206,236,246,256}         |
+| Person ID                           | -                          |
+| State                               | -                          |
+| Education                           | V210                       |
+| Labor market status (will do later) | -                          |
+| Income (will do  later)             | -                          |
+| Occupation                          | V303                       |
+| Sector                              | V304 [3 dig], V305 [1 dig] |
+
+*** Defining employment
+
+- Potentially relevant variables:
+
+  |      | Short Description                        |
+  |------+------------------------------------------|
+  | V301 | O que fez na semana                      |
+  | V308 | tinha carteira assinada                  |
+  | V310 | horas efetivamente trabalhadas na semana |
+  | V313 | tomou providencia no periodo?            |
+  | V314 | tomou providencia antes?                 |
+  |      |                                          |
+
+
+*** TODO Defining income
