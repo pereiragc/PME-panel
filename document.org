@@ -1003,8 +1003,7 @@ hh_old[hhid ==  "MG-142-411930-10-3",
 *** DONE Investigate quality of household/person match using number of people in household
 ** TODO Track people over time
 - In order for me to do that, I need to have date of birth, age and sex
-** TODO Old PME weighting scheme
-
+** TODO Old PME weighting scheme: how to compute totals
 - Let $y_{j}$ be the *total* of a variable within MSU ~j~
   + the total should be computed by simply summing all instances without any weighting
 - Let $f_{j}$ be the sampling fraction for MSU
