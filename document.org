@@ -47,6 +47,7 @@ For the examples that show up later in this documentation, I have to load some f
 
 #+begin_src R :session :results silent
 
+library(ggplot2)
 library(data.table)
 library(dtsnippets)
 
@@ -727,12 +728,16 @@ dtnppl <- hh_old[!is.na(.weight), .(estimate_pop = unique(V600)[1],
                      total_ppl_sample = sum(V109, na.rm = TRUE),
                      .weight = .weight[1]), .(.year, .state, V105)]
 
+dtnppl[, .weight_implied := estimate_pop / total_ppl_sample]
 
-dtnppl[, .(x = estimate_pop / total_ppl_sample, y = .weight)][, plot(x, y)]
+ggplot(dtnppl, aes(x = .weight, y = .weight_implied, colour = .state)) +
+  geom_point(alpha = 0.8, shape = 1, size = 4) + scale_colour_brewer(palette = "Set2") +
+  geom_abline(slope = 1, intercept = 0, linetype = 2) + theme_bw()
 
 #+end_src
 
 #+RESULTS:
+[[file:output/weights_comparison.png]]
 
 
 * Issues
