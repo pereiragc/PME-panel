@@ -748,6 +748,119 @@ ggplot(dtnppl, aes(x = .weight, y = .weight_implied, colour = .state)) +
 #+RESULTS:
 [[file:output/weights_comparison.png]]
 
+*** Reconciling post-90 weights with possible approach for pre-90
+#+begin_src R :session :results file graphics :file output/people_in_sample.pdf :colnames yes
+dtnppl[, d := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
+
+ggplot(dtnppl[.state != "BR"], aes(x = d, y = total_ppl_sample, colour = .state)) + geom_line() +
+  scale_colour_brewer(palette = "Set2") + theme_bw() + ylab("Number of people in surveyed households") + xlab("Month")
+#+end_src
+
+#+RESULTS:
+[[file:output/people_in_sample.pdf]]
+
+#+begin_src R :session :results file graphics :file output/people_in_sample_total.pdf :colnames yes
+dt_tot <- dtnppl[, .(total = sum(total_ppl_sample)), .(d)]
+
+ggplot(dt_tot, aes(x = d, y = total)) + geom_line() +
+  scale_colour_brewer(palette = "Set2") + theme_bw() + ylab("Number of people in surveyed households (all states)") + xlab("Month")
+#+end_src
+
+#+RESULTS:
+[[file:output/people_in_sample_total.pdf]]
+
+As expected, there is something happening with the number of people in the sample. I think the table from the documentation might make sense after all. For that reason, I try the following:
+
+
+#+begin_src R :session :results silent
+hh_old[.year <= 1990 & .state == "RJ", .weight := 200]
+hh_old[.year <= 1990 & .state == "SP", .weight := 300]
+hh_old[.year <= 1990 & .state == "RS", .weight := 100]
+hh_old[.year <= 1990 & .state == "MG", .weight := 100]
+hh_old[.year <= 1990 & .state == "PE", .weight := 100]
+hh_old[.year <= 1990 & .state == "BA", .weight := 100]
+
+1
+#+end_src
+
+
+Note that with the weight and the nubmer of people in interviewed households, we can estimate back the population.
+
+#+begin_src R :session :results file graphics :file output/pop_estimates.pdf
+dtnppl[hh_old, .weight := i..weight, on =.(.year, .state, V105)]
+dtnppl[.year <= 1990, estimate_pop_pre90 := total_ppl_sample * .weight]
+
+pop_compare <-
+  melt(dtnppl[, .(.state, d, estimate_pop, estimate_pop_pre90)], id.vars = c("d", ".state"))
+
+ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable)) +
+  geom_line() + scale_colour_brewer(palette = "Set2") + theme_bw()
+#+end_src
+
+#+RESULTS:
+[[file:output/pop_estimates.pdf]]
+
+What a miserable failure.
+** Unemployment
+I need to:
+- figure out age, so as to filter by age >= 10
+- figure out whether people were employed
+- figure out whether people who weren't employed searched for a job
+
+*** Age
+
+PME stores "estimated ages" (when the respondent is not sure about birth year, or even about their age) in two different columns: ~V256~ and ~V246~.
+
+Note that V246 is the same column that records the birth year of the person. Each entry of that column is supposed to be three characters, and whenever the three characters start with a zero [AND ~V206 = 00~ AND ~V236 = 20~ -- which I don't factor in below ],  the number is suppoosed to represent a guess, either by the respondent or the interviewer.
+
+~V256~ is described as "estimated age", but lacks a full documentation. At the end of the day, if ~V246~ results in a missing and we have something on ~V256~, I use ~V256~. If V246 and V256 are both defined, but disagree (which happen very very infrequently), I assign a missing value.
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+oldpme_ageestimate <- function(vday, vmonth, vyear, vage) {
+  N <- length(vday)
+
+  vyear_int <- as.integer(vyear)
+  vmonth_int <- as.integer(vmonth)
+  vday_int <- as.integer(vday)
+
+  vyear_age_idx <- rep(FALSE, N)
+  vyear_age_idx[!is.na(vyear_int) & vyear_int < 98] <- TRUE
+
+  estimated_ages <- rep(NA, N)
+  estimated_ages[vyear_age_idx] <- vyear_int[vyear_age_idx]
+
+  estimated_ages2 <- as.integer(vage)
+  estimated_ages2[!is.na(vage) & estimated_ages2 > 98] <- NA
+
+
+  estimated_ages[is.na(estimated_ages)] <- estimated_ages2[is.na(estimated_ages)]
+
+
+  ## Where the two ages differ, replace with NA
+
+  estimated_ages[estimated_ages != estimated_ages2] <- NA
+
+  return(list(
+    estimated_ages
+  ))
+}
+#+end_src
+
+
+
+The function below builds the birthday in each record.
+
+#+begin_src R :session :tangle lib_oldpme.r :results silent
+oldpme_bday <- function(vday, vmonth, vyear) {
+  built_date <- as.Date(
+    lubridate::fast_strptime(paste(paste0(1, vyear), vmonth, vday, sep = "-"),
+                             "%Y-%m-%d")
+    )
+}
+#+end_src
+
+
+
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
