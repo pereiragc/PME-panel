@@ -733,7 +733,7 @@ Os pesos para expansão das amostras da PME são obtidos pela razão entre a est
 (Free translation: "expansion weights = estimate of resident population / total of dwellers in sample [V109]; weights are unique by MSU and vary each survey month")
 
 #+begin_src R :session :results file graphics :file output/weights_comparison.png
-dtnppl <- hh_old[!is.na(.weight), .(estimate_pop = unique(V600)[1],
+dtnppl <- hh_old[, .(estimate_pop = unique(V600)[1],
                      total_ppl_sample = sum(V109, na.rm = TRUE),
                      .weight = .weight[1]), .(.year, .state, V105)]
 
