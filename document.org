@@ -801,13 +801,7 @@ ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable))
 [[file:output/pop_estimates.pdf]]
 
 What a miserable failure.
-** Unemployment
-I need to:
-- figure out age, so as to filter by age >= 10
-- figure out whether people were employed
-- figure out whether people who weren't employed searched for a job
-
-*** Age
+** Age
 
 PME stores "estimated ages" (when the respondent is not sure about birth year, or even about their age) in two different columns: ~V256~ and ~V246~.
 
@@ -847,20 +841,63 @@ oldpme_ageestimate <- function(vday, vmonth, vyear, vage) {
 #+end_src
 
 
-
 The function below builds the birthday in each record.
 
 #+begin_src R :session :tangle lib_oldpme.r :results silent
 oldpme_bday <- function(vday, vmonth, vyear) {
-  built_date <- as.Date(
+  built_date <- as.IDate(
     lubridate::fast_strptime(paste(paste0(1, vyear), vmonth, vday, sep = "-"),
                              "%Y-%m-%d")
     )
 }
 #+end_src
 
+The function below computes the age based on interview date and a vector of birth dates.
+
+Let's add them to our data.
+
+#+begin_src R :session :results silent
+pp_old[, .ageestimate := oldpme_ageestimate(V206, V236, V246, V256)]
+pp_old[, .bdate := oldpme_bday(V206, V236, V246)]
+1
+#+end_src
 
 
+Now, I recover interview day/month from the household dataset, and use that to compute an inferred age column.
+
+#+begin_src R :session :results silent
+
+pp_old[hh_old, .iviewdate :=
+           as.IDate(lubridate::fast_strptime(paste(.year, V2002, V2001,
+                                                  sep = "-"),
+                                            format = "%Y-%m-%d")),
+       on = .(hhid, V105)]
+
+pp_old[, .inferred_age := dtsnippets::age_calc(.bdate, .iviewdate),
+       .iviewdate]
+
+#+end_src
+
+
+The final work is to settle on a single workable age column. I do that below.
+
+#+begin_src R :session :results silent
+
+
+1
+#+end_src
+
+
+That basically does the following:
+
+- When estimated age concurs with inferred age, use that
+- When there is no estimated age, but there is inferred age, use inferred age, as long as inferred age is below 98 [people above 120yo who are currently attending school: we see you there! great achievement! but we're not counting you in our sample...]
+-
+** Unemployment
+
+#+begin_src R :session
+
+#+end_src
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
