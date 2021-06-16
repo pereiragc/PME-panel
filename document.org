@@ -1,6 +1,14 @@
 #+TITLE: Documentation
 #+AUTHOR: Gustavo Pereira
 
+* Dependencies
+- data.table
+- zoo
+- ggplot2
+- lubridate
+- github.com/pereiragc/dtsnippets
+- glue
+
 * Building the old PME panel
 ** Load data
 Below is a convenience function for loading PME data into memory. You can specify unit to be "person", "household", or any other string (which will load both). The timeframe can be 80s, 90s or both (by again specifying any other string.)
