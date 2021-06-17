@@ -341,7 +341,7 @@ generate_key <- function(dthh, keyvars = c("V10", "V101", "V102", "V103", "V106"
 
 So, for example,
 
-#+begin_src R :session :colnames yes :rownames yes :eval false
+#+begin_src R :session :colnames yes :rownames yes
 
 hh95[, hhid := generate_key(.SD, c("UF", "V101", "V102", "V103", "V106"))]
 
@@ -374,11 +374,11 @@ hh95[, hhid2 := generate_key(.SD, key2)]
 pp95[, hhid2 := generate_key(.SD, key2)]
 pp95[hh95, hhid := hhid , on = "hhid2"]
 
-pp95[, .N] # otherwise org-mode stutters for some reason
+1
 
 #+end_src
 
-#+RESULTS:
+Now let's see what we got.
 
 *** Sanity check: number of people in household
 
@@ -442,7 +442,6 @@ pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][orde
 
 ** Combining ~person~ and ~household~ pre-1990
 <<sec:combine_hh_pp_algo>>
-
 The key to combine person and household is to use the columns (see [[sec:issue-identify-people-household]]):
 | Column       | Meaning                             | Availability 80s  | Availability 90s  |
 |--------------+-------------------------------------+-------------------+-------------------|
@@ -516,6 +515,7 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 
 YES!
 ** Combining ~person~ and ~household~ for all old PME years
+
 In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
 
 First, I remove the columns I created while exploring the keying in the above sections.
@@ -580,7 +580,7 @@ dt_test[, sum(impl_nppl != nppl_gt10yo, na.rm= TRUE)]
 #+end_src
 
 #+RESULTS:
-: 1
+: 2
 
 Breaking down what I do above:
 
@@ -1012,7 +1012,7 @@ ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, linetype = Series)) + geom_l
 - Happens in /at least/ 13% of observations (so substantial for that (state,year) pair)
   + This is found via
 
-    #+begin_src R
+    #+begin_src R :session 
 library(data.table)
 
 pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData/"
@@ -1020,6 +1020,9 @@ DT <- data.table::fread(file.path(pme_dir, "person-2000.csv"))
 
 DT[V500 != ""][, .N] /  DT[.state == "BA"][,.N]
     #+end_src
+
+    #+RESULTS:
+    : 0.134287044701987
 
     - note that ~fread~ automatically trims whitespaces, so this finds all instances in which ~V500~ is different than whitespace
 
@@ -1168,7 +1171,7 @@ hh_all[, .(n_unique_id1 = length(unique(hhid1))), .(ANO, hhid2)][, .N, .(ANO, n_
 
 Note that I included ~MÊS~ (month) in ~hhid2~, and now we get an ID that is /finer/ than ~hhid1~! In fact, the above computation was unnecessary, because ~hhid2~ identifies entries of the household dataset uniquely:
 
-#+begin_src R :session :colnames yes
+#+begin_src R :session :colnames yes :eval no
 hh_all[, .(nobs = .N), .(hhid2, ANO)][, .(freq = .N), .(nobs, ANO)]
 #+end_src
 
@@ -1545,7 +1548,6 @@ pp_old[.year <= 1990, unique(PESO)]
 
   #+RESULTS:
 
-
 - The only reference I have found for that period is the methodology [[file:docs/PME-80-methodology.pdf][document]] which mentions the table
   | MSU            | State (my addition) | Sampling fraction |
   |----------------+---------------------+-------------------|
@@ -1574,8 +1576,8 @@ pp_old[.year <= 1990, unique(PESO)]
 *** DONE Investigate quality of household/person match using number of people in household
 ** TODO Track people over time
 - In order for me to do that, I need to have date of birth, age and sex
-** TODO Old PME: how to get weights
-** TODO Old PME: how to compute totals using weights
+** KILL Old PME: how to get weights
+** DONE Old PME: how to compute totals using weights
 - Let $y_{j}$ be the *total* of a variable within MSU ~j~
   + the total should be computed by simply summing all instances without any weighting
 - Let $f_{j}$ be the sampling fraction for MSU
@@ -1624,6 +1626,5 @@ Os pesos para expansão das amostras da PME são obtidos pela razão entre a est
   | V313 | tomou providencia no periodo?            |
   | V314 | tomou providencia antes?                 |
   |      |                                          |
-
 
 *** TODO Defining income
