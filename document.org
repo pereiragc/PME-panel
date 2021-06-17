@@ -900,9 +900,94 @@ With that procedure, we get a total of src_R[:session :exports results]{100*pp_o
 
 ** Unemployment
 
-#+begin_src R :session
+Here I try to come up with a reasonable definition of unemployment, and will contrast the outcome with official statistics.
+
+#+begin_src R :session :results silent
+pp_old[, .PIA := .age >= 10]
+pp_old[V301 %in% c(1,2), `:=`(occup = TRUE,
+                              labor_force = TRUE)]
+pp_old[V301 == 3, `:=`(labor_force = TRUE,
+                       occup = FALSE)]
+
+pp_old[V301 %between% c(4,7) & .PIA == TRUE, labor_force := (V313 == 1)]
+
+pp_old[V301 %between% c(4,7)  & V313 == 1 & .PIA == TRUE, occup := FALSE]
+
+
+1
+#+end_src
+
+
+What does the unemployment rate look like? Weighted and unweighted
+
+#+begin_src R :session :colnames yes
+dt_unemp <- melt(pp_old[, .(`Constructed (weighted)` = mean(.weight * !occup, na.rm=TRUE) / mean(.weight * (occup + !occup), na.rm=TRUE),
+                            `Constructed (unweighted)` = mean(!occup, na.rm = TRUE)), .(.year, V105)],
+                 id.vars = c(".year", "V105"),
+                 value.name = "unemp_rate",
+                 variable.name = "Series")
+
+dt_unemp[, unemp_rate := 100 * unemp_rate]
+
+
+dt_unemp[, .SD[1:2] , Series]
+#+end_src
+
+#+RESULTS:
+| Series                   | .year | V105 |       unemp_rate |
+|--------------------------+-------+------+------------------|
+| Constructed (weighted)   |  1984 |    1 | 8.32840174155641 |
+| Constructed (weighted)   |  1984 |    2 | 8.97622266724949 |
+| Constructed (unweighted) |  1984 |    1 | 8.34040195959631 |
+| Constructed (unweighted) |  1984 |    2 | 9.06404434352878 |
+
+
+above, just an example of how it looks like... Now I download official unemployment data.
+
+
+#+begin_src R :session :colnames yes
+unemp_official <- melt(data.table::fread("docs/ibge-unemp.csv",
+                                         colClasses = list(character = "Ano")),
+                       id.vars = "Ano")
+
+unemp_official[as.integer(Ano) %between% c(80, 99), Ano := paste0("19", Ano)]
+unemp_official[nchar(Ano) == 2, Ano := paste0("20", Ano)]
+unemp_official[, Ano := as.integer(Ano)]
+
+setnames(unemp_official, c("Ano", "variable", "value"), c(".year", "V105", "unemp_rate"))
+
+unemp_official[, Series := "IBGE (official)"]
+
+
+unemp_official[1:5]
+#+end_src
+
+#+RESULTS:
+| .year | V105 | unemp_rate | Series          |
+|-------+------+------------+-----------------|
+|  1983 |    1 |        6.3 | IBGE (official) |
+|  1984 |    1 |       7.45 | IBGE (official) |
+|  1985 |    1 |       6.31 | IBGE (official) |
+|  1986 |    1 |       4.18 | IBGE (official) |
+|  1987 |    1 |       3.19 | IBGE (official) |
+
+
+
+Now I combine these two and plot!
+
+#+begin_src R :session :colnames yes :results file graphics :file output/unemployment_rate.png
+
+dt_unemp_plot <- rbind(dt_unemp, unemp_official)
+dt_unemp_plot[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
+
+dt_unemp_plot <- dt_unemp_plot[!is.na(Date)]
+
+ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, linetype = Series)) + geom_line()
 
 #+end_src
+
+#+RESULTS:
+[[file:output/unemployment_rate.png]]
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
