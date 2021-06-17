@@ -317,7 +317,6 @@ hh_old[V2002 != V105][, .N, V2001][order(-N)]
 
 ** Combining ~person~ and ~household~ datasets: example of 1995
 <<sec:merge-key-algorithm-95>>
-
 Note: see [[sec:issue-identify-people-household]] for how the algorithm came about
 
 
@@ -899,19 +898,24 @@ That basically does the following:
 With that procedure, we get a total of src_R[:session :exports results]{100*pp_old[!is.na(.age), .N]/pp_old[, .N]} {{{results(=96.3306587637139=)}}} percent entries with a valid age.
 
 ** Unemployment
-
 Here I try to come up with a reasonable definition of unemployment, and will contrast the outcome with official statistics.
 
 #+begin_src R :session :results silent
+
+cc <- intersect(c(".PIA", "occup", "labor_force"), colnames(pp_old))
+
+pp_old[, cc := NULL]
+
+
 pp_old[, .PIA := .age >= 10]
 pp_old[V301 %in% c(1,2), `:=`(occup = TRUE,
                               labor_force = TRUE)]
 pp_old[V301 == 3, `:=`(labor_force = TRUE,
                        occup = FALSE)]
 
-pp_old[V301 %between% c(4,7) & .PIA == TRUE, labor_force := (V313 == 1)]
+pp_old[V301 %between% c(5,7) & .PIA == TRUE, labor_force := (V313 == 1)]
 
-pp_old[V301 %between% c(4,7)  & V313 == 1 & .PIA == TRUE, occup := FALSE]
+pp_old[V301 %between% c(5,7)  & V313 == 1 & .PIA == TRUE, occup := FALSE]
 
 
 1
@@ -921,8 +925,18 @@ pp_old[V301 %between% c(4,7)  & V313 == 1 & .PIA == TRUE, occup := FALSE]
 What does the unemployment rate look like? Weighted and unweighted
 
 #+begin_src R :session :colnames yes
-dt_unemp <- melt(pp_old[, .(`Constructed (weighted)` = mean(.weight * !occup, na.rm=TRUE) / mean(.weight * (occup + !occup), na.rm=TRUE),
-                            `Constructed (unweighted)` = mean(!occup, na.rm = TRUE)), .(.year, V105)],
+
+dt_unemp_0 <- pp_old[, .(unemp = mean(!occup, na.rm=TRUE)),
+                      .(.state, .year, V105)]
+
+dt_unemp_0[hh_old, .weight := .weight, on = .(.state, .year, V105)]
+
+
+dt_unemp_0 <- dt_unemp_0[, .(`Constructed (weighted)` = mean(unemp * .weight, na.rm = TRUE) / mean(.weight, na.rm = TRUE),
+                             `Constructed (unweighted)` = mean(unemp, na.rm = TRUE)), .(.year, V105)]
+
+
+dt_unemp <- melt(dt_unemp_0,
                  id.vars = c(".year", "V105"),
                  value.name = "unemp_rate",
                  variable.name = "Series")
@@ -936,10 +950,10 @@ dt_unemp[, .SD[1:2] , Series]
 #+RESULTS:
 | Series                   | .year | V105 |       unemp_rate |
 |--------------------------+-------+------+------------------|
-| Constructed (weighted)   |  1984 |    1 | 8.32840174155641 |
-| Constructed (weighted)   |  1984 |    2 | 8.97622266724949 |
-| Constructed (unweighted) |  1984 |    1 | 8.34040195959631 |
-| Constructed (unweighted) |  1984 |    2 | 9.06404434352878 |
+| Constructed (weighted)   |  1984 |    1 | 8.29792490207276 |
+| Constructed (weighted)   |  1984 |    2 | 8.98037659835562 |
+| Constructed (unweighted) |  1984 |    1 | 8.31780024472205 |
+| Constructed (unweighted) |  1984 |    2 | 9.07450307372515 |
 
 
 above, just an example of how it looks like... Now I download official unemployment data.
@@ -975,14 +989,14 @@ unemp_official[1:5]
 
 Now I combine these two and plot!
 
-#+begin_src R :session :colnames yes :results file graphics :file output/unemployment_rate.png
+#+begin_src R :session :colnames yes :results file graphics :file output/unemployment_rate.png :width 700 :height 400
 
 dt_unemp_plot <- rbind(dt_unemp, unemp_official)
 dt_unemp_plot[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
 
 dt_unemp_plot <- dt_unemp_plot[!is.na(Date)]
 
-ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, linetype = Series)) + geom_line()
+ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, colour = Series)) + geom_line(size = 1.2) + scale_colour_brewer(palette = "Set2") + theme_bw() + theme(legend.position = "bottom")
 
 #+end_src
 
