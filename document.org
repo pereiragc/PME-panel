@@ -883,6 +883,9 @@ The final work is to settle on a single workable age column. I do that below.
 
 #+begin_src R :session :results silent
 
+pp_old[.ageestimate == .inferred_age, .age := .inferred_age]
+pp_old[is.na(.ageestimate) & !is.na(.inferred_age) &
+       .inferred_age < 98, .age := .inferred_age]
 
 1
 #+end_src
@@ -892,7 +895,9 @@ That basically does the following:
 
 - When estimated age concurs with inferred age, use that
 - When there is no estimated age, but there is inferred age, use inferred age, as long as inferred age is below 98 [people above 120yo who are currently attending school: we see you there! great achievement! but we're not counting you in our sample...]
--
+
+With that procedure, we get a total of src_R[:session :exports results]{100*pp_old[!is.na(.age), .N]/pp_old[, .N]} {{{results(=96.3306587637139=)}}} percent entries with a valid age.
+
 ** Unemployment
 
 #+begin_src R :session
