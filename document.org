@@ -801,7 +801,14 @@ ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable))
 #+RESULTS:
 [[file:output/pop_estimates.pdf]]
 
-What a miserable failure.
+What a miserable failure. Still, I add that to the person dataset.
+
+#+begin_src R :session :results silent
+
+pp_old[hh_old, .weight := .weight, on = .(.year, .state, V105, hhid)] 
+
+1
+#+end_src
 ** Age
 
 PME stores "estimated ages" (when the respondent is not sure about birth year, or even about their age) in two different columns: ~V256~ and ~V246~.
