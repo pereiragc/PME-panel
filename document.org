@@ -581,7 +581,7 @@ dt_test[, sum(impl_nppl != nppl_gt10yo, na.rm= TRUE)]
 #+end_src
 
 #+RESULTS:
-: 2
+: 1
 
 Breaking down what I do above:
 
@@ -884,6 +884,8 @@ pp_old[hh_old, .iviewdate :=
 pp_old[, .inferred_age := dtsnippets::age_calc(.bdate, .iviewdate),
        .iviewdate]
 
+1
+
 #+end_src
 
 
@@ -1116,30 +1118,33 @@ Let's see how it performs.
 
 #+begin_src R :session :colnames yes
 
-pp_old[!is.na(hhid) & !is.na(.bdate), appearance_count1 := .N, .(hhid, .year, V105, crit1)]
+pp_old[!is.na(hhid) & !is.na(.bdate), .fl_id1 := .N, .(hhid, .year, V105, crit1)]
 
-pp_old[, .N, appearance_count1]
+pp_old[, .N, .fl_id1]
 
 #+end_src
 
 #+RESULTS:
-| appearance_count1 |        N |
-|-------------------+----------|
-|                   |   644139 |
-|                 1 | 18969503 |
-|                 2 |   122120 |
-|                 3 |      834 |
-|                13 |       13 |
-|                 4 |       76 |
-|                 6 |       18 |
-|                 5 |       35 |
-|                12 |       12 |
-|                 8 |        8 |
+| .fl_id1 |        N |
+|---------+----------|
+|         |   644139 |
+|       1 | 18969503 |
+|       2 |   122120 |
+|       3 |      834 |
+|      13 |       13 |
+|       4 |       76 |
+|       6 |       18 |
+|       5 |       35 |
+|      12 |       12 |
+|       8 |        8 |
 
 
 - Each (hhid, .year, V105, crit1) should not appear more than once.
 - There are around 640 thousand entries for which either a missing household id or birth date prevents us from idenfitying them.
 - For something in the order of 120 thousand entries, the key (sex, date of birth) did not identify individuals within households. 
+
+
+
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
@@ -1511,8 +1516,6 @@ Here is the flag documentation:
 |    1 | NA V102                               |
 |    2 | Non-missing V102 with improper format |
 
-
-
 ** [2021-06-13 Sun] Recycling of household IDs
 
 Let's examine the household identified with ~hhid~ "MG-142-411930-10-3":
@@ -1709,6 +1712,49 @@ pp_old[.year <= 1990, unique(PESO)]
   | Belo Horizonte | MG                  | 1/100             |
   | Recife         | PE                  | 1/100             |
   | Salvador       | BA                  | 1/100             |
+** [2021-06-19 Sat] Weird values for ~V313~ [attempted to find a job?] 
+After the hideous result of plotting labor market status over time, I noticed that  variable 313 -- whether the person /attempted/ to find a job -- has a weird pattern.
+
+The variable coding, per the documentation, should be
+
+| Variable | Value | Meaning   |
+|----------+-------+-----------|
+| V313     |       |           |
+|          |     1 | Yes       |
+|          |     3 | No        |
+|          |     9 | No answer |
+
+#+begin_src R :session :colnames yes
+pp_old[, .fl_valid313 := NULL]  # erase column if previously present
+pp_old[!is.na(V313), .fl_valid313 := V313 %in% c(1,3,9)] 
+
+countby(pp_old[!is.na(V313)], ".fl_valid313", ".year")[[1]]
+#+end_src
+
+#+RESULTS:
+| .year | .fl_valid313 = FALSE | .fl_valid313 = TRUE |
+|-------+----------------------+---------------------|
+|  1984 |                    0 |              640758 |
+|  1985 |                 1571 |              593570 |
+|  1986 |                18056 |                1419 |
+|  1987 |                16867 |                1054 |
+|  1988 |                14283 |                 973 |
+|  1989 |                10585 |                1694 |
+|  1990 |                    0 |              498731 |
+|  1991 |                    0 |              512365 |
+|  1992 |                    0 |              508029 |
+|  1993 |                    0 |              518304 |
+|  1994 |                    0 |              520785 |
+|  1995 |                    0 |              522406 |
+|  1996 |                    0 |              518811 |
+|  1997 |                    0 |              531603 |
+|  1998 |                    0 |              536170 |
+|  1999 |                    0 |              542400 |
+|  2000 |                 2519 |              476174 |
+
+
+Note that we see, in the year range 1986-1989 range, most of ~V313~'s values are invalid. That makes it very hard to understand who is in or out of the labor force.
+
 
 * Tasks
 ** DONE Identify people and households
