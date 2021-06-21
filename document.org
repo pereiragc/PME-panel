@@ -998,19 +998,148 @@ unemp_official[1:5]
 
 Now I combine these two and plot!
 
-#+begin_src R :session :colnames yes :results file graphics :file output/unemployment_rate.png :width 700 :height 400
+#+begin_src R :session :results output graphics file :file output/unemployment_rate.pdf :width 7 :height 5
 
 dt_unemp_plot <- rbind(dt_unemp, unemp_official)
 dt_unemp_plot[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
 
 dt_unemp_plot <- dt_unemp_plot[!is.na(Date)]
 
-ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, colour = Series)) + geom_line(size = 1.2) + scale_colour_brewer(palette = "Set2") + theme_bw() + theme(legend.position = "bottom")
+ggplot(dt_unemp_plot, aes(x = Date, y = unemp_rate, colour = Series)) + geom_line(size = 1.2) +
+  ylab("Unemployment Rate") + scale_colour_grey() + theme_bw() + theme(legend.position = "bottom")
+#+end_src
+
+#+RESULTS:
+[[file:output/unemployment_rate.pdf]]
+
+** Formality status
+Column ~V306~ asks: what's your position in your occupation? Answer is one of
+- empregado [employee] :: ~V306 == 2~
+- conta propria [self employed] ::  ~V306 == 4~
+- não-remunerado [non-remunerated] :: ~V306 == 8~ 
+- ignorado [ignored] :: ~V306 == 9~
+
+Column ~V308~ records the answer to whether the person had a signed labor booklet or not ('2' for yes, '4' for no).
+
+So below I construct the ~.labor_status~ flag.
+
+#+begin_src R :session
+pp_old[V306 == 4, .labor_status := "self_employed"]
+pp_old[(V306 == 2) & (V308 == 2), .labor_status := "formal_salaried"]
+pp_old[(V306 == 2) & (V308 == 4), .labor_status := "informal_salaried"]
+pp_old[occup == FALSE, .labor_status := "unemployed"]
+pp_old[labor_force == FALSE, .labor_status := "OLF"]
+
+1 
+#+end_src
+
+#+RESULTS:
+: 1
+
+Let's tabulate this over time.
+
+#+begin_src R :session :results silent
+
+
+timetab <- pp_old[, .(freq = .N), .(.labor_status, .year, .state, V105)]
+
+timetab[hh_old, .weight := .weight, on = .(.year, .state, V105)]
+
+timetab_agg <- timetab[V105 %between% c(1,12), .(total = sum(.weight  * freq, na.rm= TRUE)), .(.year, V105, .labor_status)]
+    
+timetab_agg[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
+timetab_agg[is.na(.labor_status), .labor_status :=  "missing"] 
+
+
+1
+#+end_src
+
+
+Absolute plots: unemployed, self employed, formal salaried, informal salaried.
+
+#+begin_src R :session :results file graphics output :file output/absolute_labor_status.pdf
+timetab_long <- timetab_agg[.labor_status %in% c("formal_salaried", "informal_salaried",
+                                      "self_employed", "unemployed")]
+
+ggplot(timetab_long, aes(x = Date, y = total)) + geom_area(aes(fill = .labor_status)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
 
 #+end_src
 
 #+RESULTS:
-[[file:output/unemployment_rate.png]]
+[[file:output/absolute_labor_status.pdf]]
+
+
+Share of informal workers 1: including self employed
+
+#+begin_src R :session :results file graphics output :file output/informal_labor_share_se.pdf :width 7 :height 4
+timetab_wide <- dcast(timetab_long, Date ~ .labor_status, value.var = "total")
+timetab_wide[, `Formal Share [se]` := formal_salaried / (formal_salaried + informal_salaried + self_employed)]
+timetab_wide[, `Formal Share [salaried]` := formal_salaried / (formal_salaried + informal_salaried)]
+timetab_wide[, `Unemployment Rate` := unemployed / (formal_salaried + informal_salaried + self_employed + unemployed)]
+
+ggplot(melt(timetab_wide[, .(Date, `Unemployment Rate`, `Formal Share [se]`)], id.vars = "Date"),
+       aes(Date, value)) + facet_wrap(~variable, scales = "free_y") + geom_line() + ylab("Share (in [0,1])")
+
+#+end_src
+
+#+RESULTS:
+[[file:output/informal_labor_share_se.pdf]]
+
+
+Now, share of formal workers not including self employed.
+
+#+begin_src R :session :results file graphics output :file output/informal_labor_share_nse.pdf :width 7 :height 4
+ggplot(melt(timetab_wide[, .(Date, `Unemployment Rate`, `Formal Share [salaried]`)], id.vars = "Date"),
+       aes(Date, value)) + facet_wrap(~variable, scales = "free_y") + geom_line() + ylab("Share (in [0,1])")
+
+#+end_src
+
+#+RESULTS:
+[[file:output/informal_labor_share_nse.pdf]]
+
+** Identifying individuals over time    
+First set the persons dataset key to household, year, month:
+#+begin_src R :session :results silent 
+setkey(pp_old, hhid, .year, V105)
+1
+#+end_src
+
+The first criterion is (household, date of birth, sex):
+
+#+begin_src R :session :results silent
+pp_old[!is.na(hhid) & !is.na(.bdate), crit1 := .GRP, .(hhid, .bdate)]
+1
+#+end_src
+
+Let's see how it performs.
+
+#+begin_src R :session :colnames yes
+
+pp_old[!is.na(hhid) & !is.na(.bdate), appearance_count1 := .N, .(hhid, .year, V105, crit1)]
+
+pp_old[, .N, appearance_count1]
+
+#+end_src
+
+#+RESULTS:
+| appearance_count1 |        N |
+|-------------------+----------|
+|                   |   644139 |
+|                 1 | 18969503 |
+|                 2 |   122120 |
+|                 3 |      834 |
+|                13 |       13 |
+|                 4 |       76 |
+|                 6 |       18 |
+|                 5 |       35 |
+|                12 |       12 |
+|                 8 |        8 |
+
+
+- Each (hhid, .year, V105, crit1) should not appear more than once.
+- There are around 640 thousand entries for which either a missing household id or birth date prevents us from idenfitying them.
+- For something in the order of 120 thousand entries, the key (sex, date of birth) did not identify individuals within households. 
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
