@@ -540,6 +540,8 @@ hh_old[, hhid := generate_key(.SD, c(".state", "V101", "V102", "V103", "V106"))]
    #+begin_src R :session :results silent
 pp_old[hh_old[!is.na(n_entry)], `:=`(hhid = hhid, V105 = V105),
        on = .(.state, .year, n_entry)]
+## if `hhid` and `V105` are already in the data, the statemenet needs to be
+## changed to `:=`(hhid = i.hhid, V105 = i.V105) ...
 1
    #+end_src
 
