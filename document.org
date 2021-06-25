@@ -1100,49 +1100,310 @@ ggplot(melt(timetab_wide[, .(Date, `Unemployment Rate`, `Formal Share [salaried]
 #+RESULTS:
 [[file:output/informal_labor_share_nse.pdf]]
 
-** Identifying individuals over time    
-First set the persons dataset key to household, year, month:
-#+begin_src R :session :results silent 
-setkey(pp_old, hhid, .year, V105)
-1
-#+end_src
+** Identifying individuals over time: subsample
+:LOGBOOK:
+CLOCK: [2021-06-21 Mon 17:31]--[2021-06-21 Mon 17:56] =>  0:25
+CLOCK: [2021-06-21 Mon 15:38]--[2021-06-21 Mon 16:03] =>  0:25
+CLOCK: [2021-06-21 Mon 15:08]--[2021-06-21 Mon 15:33] =>  0:25
+:END:
+I'll extract a sample of 100 households each year and work with that for the moment.
 
-The first criterion is (household, date of birth, sex):
+The relevant variables are:
 
-#+begin_src R :session :results silent
-pp_old[!is.na(hhid) & !is.na(.bdate), crit1 := .GRP, .(hhid, .bdate)]
-1
-#+end_src
-
-Let's see how it performs.
-
+- hhid :: household ID (see previous sections)
+- V105 :: month 
+- .year :: year
+- V202 :: sex
+- .bdate :: birth date (see previous sections) 
+- .age :: inferred age (see previous sections)
+- V201 :: person number (in portuguese, /número de ordem/)
+- V206 :: birth day (1 - 31)
+- V236 :: birth month
+- V246 :: birth year
+- V210 :: degree (0-9) 
+- V203 :: household role (in portuguese, /condição no domicílio/) 
+  
 #+begin_src R :session :colnames yes
+set.seed(111)
+n_hh_year <- 100
+hhid_sample <- pp_old[!is.na(hhid), sample(unique(hhid), n_hh_year), .year][, unique(V1)]
 
-pp_old[!is.na(hhid) & !is.na(.bdate), .fl_id1 := .N, .(hhid, .year, V105, crit1)]
+hhid_sample <- pp_old[!is.na(hhid),
+                      .(sampled_hh = sample(unique(hhid), n_hh_year)), .year
+                      ][, unique(sampled_hh)]
 
-pp_old[, .N, .fl_id1]
+select_vars <- c("hhid", "V105", ".year", "V202", ".bdate", ".age", "V201",
+                 "V206", "V236", "V246", "V210", "V203")
+
+pp_old_samp <- pp_old[hhid %in% hhid_sample][, select_vars, with = FALSE]
+
+## Print an example household
+hh_example <- pp_old_samp[, unique(hhid)[775]]
+pp_old_samp[hhid == hh_example,,] 
 
 #+end_src
 
 #+RESULTS:
-| .fl_id1 |        N |
-|---------+----------|
-|         |   644139 |
-|       1 | 18969503 |
-|       2 |   122120 |
-|       3 |      834 |
-|      13 |       13 |
-|       4 |       76 |
-|       6 |       18 |
-|       5 |       35 |
-|      12 |       12 |
-|       8 |        8 |
+| hhid               | V105 | .year | V202 |     .bdate | .age | V201 | V206 | V236 | V246 | V210 | V203 |
+|--------------------+------+-------+------+------------+------+------+------+------+------+------+------|
+| RJ-156-111570-10-2 |    2 |  1984 |    1 | 1938-08-12 |   45 |    1 |   12 |    8 |  938 |    6 |    1 |
+| RJ-156-111570-10-2 |    2 |  1984 |    3 | 1947-11-04 |   36 |    2 |    4 |   11 |  947 |    6 |    2 |
+| RJ-156-111570-10-2 |    3 |  1984 |    1 | 1938-08-12 |   45 |    1 |   12 |    8 |  938 |    6 |    1 |
+| RJ-156-111570-10-2 |    3 |  1984 |    3 | 1947-11-04 |   36 |    2 |    4 |   11 |  947 |    6 |    2 |
+| RJ-156-111570-10-2 |   12 |  1990 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    1 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    2 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    3 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |   12 |  1991 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    1 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    2 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |
+| RJ-156-111570-10-2 |    3 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |
 
 
-- Each (hhid, .year, V105, crit1) should not appear more than once.
-- There are around 640 thousand entries for which either a missing household id or birth date prevents us from idenfitying them.
-- For something in the order of 120 thousand entries, the key (sex, date of birth) did not identify individuals within households. 
+There's nothing particularly remarkable about the above household, =RJ-156-111570-10-2=. However, I'll use it as example throughout my exploration.
 
+Below, I use the date-of-birth + sex criterion to join households.
+
+#+begin_src R :session :colnames yes
+
+pp_old_samp[!is.na(V202) & !is.na(hhid) & !is.na(.bdate), person_id1 := .GRP, .(hhid, V202, .bdate)]
+
+pp_old_samp[hhid == hh_example]
+
+#+end_src
+
+#+RESULTS:
+| hhid               | V105 | .year | V202 |     .bdate | .age | V201 | V206 | V236 | V246 | V210 | V203 | person_id1 |
+|--------------------+------+-------+------+------------+------+------+------+------+------+------+------+------------|
+| RJ-156-111570-10-2 |    2 |  1984 |    1 | 1938-08-12 |   45 |    1 |   12 |    8 |  938 |    6 |    1 |       3494 |
+| RJ-156-111570-10-2 |    2 |  1984 |    3 | 1947-11-04 |   36 |    2 |    4 |   11 |  947 |    6 |    2 |       3495 |
+| RJ-156-111570-10-2 |    3 |  1984 |    1 | 1938-08-12 |   45 |    1 |   12 |    8 |  938 |    6 |    1 |       3494 |
+| RJ-156-111570-10-2 |    3 |  1984 |    3 | 1947-11-04 |   36 |    2 |    4 |   11 |  947 |    6 |    2 |       3495 |
+| RJ-156-111570-10-2 |   12 |  1990 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    1 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    2 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    3 |  1991 |    3 | 1919-09-20 |   71 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |   12 |  1991 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    1 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    2 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+| RJ-156-111570-10-2 |    3 |  1992 |    3 | 1919-09-20 |   72 |    1 |   20 |    9 |  919 |    6 |    1 |       3496 |
+
+
+- Note that this two families share the same household ID.
+  + One interviewed Feb, March 1984 and the other interviewed between December 1990 and March 1991, as well as January 1992 and March 1992.
+- The IDing criterion seems to be doing a sensible thing here. 
+  + the first time the household shows up, it contains a family of one female and one male of respectively 45 and 36 years old
+  + the second time, a  single person aged 71
+
+
+Time to see whether there are issues with this IDing. The crucial thing is to see how many person IDs are ambiguous, i.e., show up more than once for a given (household, year, month).
+
+#+begin_src R :session :colnames yes
+
+pp_old_samp[!is.na(person_id1), ambiguous_id1 := .N > 1, .(person_id1, .year, V105)]
+
+pp_old_samp[, .N, ambiguous_id1]
+    
+#+end_src
+
+#+RESULTS:
+| ambiguous_id1 |     N |
+|---------------+-------|
+| FALSE         | 37955 |
+|               |  1275 |
+| TRUE          |    84 |
+
+- There is minimum ambiguity and some missingness.
+
+For completeness, I print a household where there is ambiguity.
+
+#+begin_src R :session :colnames yes
+ambiguous_ex <- pp_old_samp[(ambiguous_id1), unique(hhid)[5]]
+
+pp_old_samp[hhid == ambiguous_ex]
+#+end_src
+
+#+RESULTS:
+| hhid               | V105 | .year | V202 |     .bdate | .age | V201 | V206 | V236 | V246 | V210 | V203 | person_id1 | ambiguous_id1 |
+|--------------------+------+-------+------+------------+------+------+------+------+------+------+------+------------+---------------|
+| MG-176-411035-13-2 |   12 |  1990 |    1 | 1903-12-08 |   87 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |   12 |  1990 |    3 | 1907-02-23 |   83 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |   12 |  1990 |    3 | 1947-11-14 |   43 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | TRUE          |
+| MG-176-411035-13-2 |   12 |  1990 |    3 | 1947-11-14 |   43 |    4 |   14 |   11 |  947 |    4 |    3 |       1381 | TRUE          |
+| MG-176-411035-13-2 |    1 |  1991 |    1 | 1903-12-08 |   87 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    1 |  1991 |    3 | 1907-02-23 |   83 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    1 |  1991 |    3 | 1947-11-14 |   43 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | TRUE          |
+| MG-176-411035-13-2 |    1 |  1991 |    3 | 1947-11-14 |   43 |    4 |   14 |   11 |  947 |    4 |    3 |       1381 | TRUE          |
+| MG-176-411035-13-2 |    2 |  1991 |    1 | 1903-12-08 |   87 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    2 |  1991 |    3 | 1907-02-23 |   83 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    2 |  1991 |    3 | 1947-11-14 |   43 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1991 |    1 | 1903-12-08 |   87 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1991 |    3 | 1907-02-23 |   84 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1991 |    3 | 1947-11-14 |   43 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+| MG-176-411035-13-2 |   12 |  1991 |    1 | 1903-12-08 |   88 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |   12 |  1991 |    3 | 1907-02-23 |   84 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |   12 |  1991 |    3 | 1947-11-14 |   44 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+| MG-176-411035-13-2 |    1 |  1992 |    1 | 1903-12-08 |   88 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    1 |  1992 |    3 | 1907-02-23 |   84 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    1 |  1992 |    3 | 1947-11-14 |   44 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+| MG-176-411035-13-2 |    2 |  1992 |    1 | 1903-12-08 |   88 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    2 |  1992 |    3 | 1907-02-23 |   84 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    2 |  1992 |    3 | 1947-11-14 |   44 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1992 |    1 | 1903-12-08 |   88 |    1 |    8 |   12 |  903 |    1 |    1 |       1379 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1992 |    3 | 1907-02-23 |   85 |    2 |   23 |    2 |  907 |    1 |    2 |       1380 | FALSE         |
+| MG-176-411035-13-2 |    3 |  1992 |    3 | 1947-11-14 |   44 |    3 |   14 |   11 |  947 |    6 |    3 |       1381 | FALSE         |
+
+In this example:
+- This is a household with two senior individuals, male and female;
+- in the first 2 survey months, there are two records for 43 years old people
+- one of them then disappear.
+  + note that using the "person number" from PME, we would have two separate people with the Ribas & Soares methodology
+
+
+Now, I start to sophisticate the merge a little bit. Let's try to identify people by sex and age.
+
+I begin by setting the key to household > sex > age
+
+#+begin_src R :session :results silent
+setkey(pp_old_samp, hhid, V202, .age)
+1
+#+end_src
+
+And then I test for whether ages increase by one or zero (it should be the same person in that case). (This turns out somewhat complicated if a for loop is to be avoided.)
+
+#+begin_src R :session :results silent
+## Tag where age increasese by anything different than c(0, 1)
+pp_old_samp[, .tag_age_change := frollapply(.age, 2,
+                                     function(x) {
+                                       agediff <- x[2] - x[1]
+                                       return(!(agediff %in% c(0,1)))
+                                     },
+                                     fill = 1),
+            .(hhid, V202)]
+## add row number
+
+pp_old_samp[, rown := 1:.N]
+    
+## select age changing points
+tmpDT <- pp_old_samp[.tag_age_change  > 0][, .(person_id2 = .I, rown)]
+
+## use rolling merge
+pp_old_samp <- tmpDT[pp_old_samp[, -".tag_age_change", with = FALSE], on = .(rown), roll = TRUE]
+
+1
+#+end_src
+
+Tag ambiguous ID2.
+
+#+begin_src R :session :colnames yes
+pp_old_samp[!is.na(person_id2), ambiguous_id2 := .N > 1, .(person_id2, .year, V105)] 
+
+pp_old_samp[, .N, ambiguous_id2]
+#+end_src
+
+#+RESULTS:
+| ambiguous_id2 |     N |
+|---------------+-------|
+| FALSE         | 34819 |
+| TRUE          |  4495 |
+
+I sample an ID from ambiguous ID2.
+
+#+begin_src R :session :colnames yes
+set.seed(102)
+hh0 <- pp_old_samp[(ambiguous_id2)][, sample(unique(hhid), 1)]
+
+pp_old_samp[hhid == hh0][, -c("rown", "hhid", "ambiguous_id1"), with = FALSE]
+
+#+end_src
+
+#+RESULTS:
+| person_id2 | V105 | .year | V202 |     .bdate | .age | V201 | V206 | V236 | V246 | V210 | V203 | person_id1 | ambiguous_id2 |
+|------------+------+-------+------+------------+------+------+------+------+------+------+------+------------+---------------|
+|       1990 |    5 |  1989 |    1 |            |      |    5 |   99 |   99 |  999 |    3 |    3 |            | FALSE         |
+|       1991 |    6 |  1989 |    1 | 1979-05-23 |   10 |    5 |   23 |    5 |  979 |    3 |    3 |       1713 | FALSE         |
+|       1992 |    3 |  1988 |    1 | 1948-02-12 |   40 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    4 |  1988 |    1 | 1948-02-12 |   40 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    5 |  1988 |    1 | 1948-02-12 |   40 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    6 |  1988 |    1 | 1948-02-12 |   40 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    3 |  1989 |    1 | 1948-02-12 |   41 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    4 |  1989 |    1 | 1948-02-12 |   41 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    5 |  1989 |    1 | 1948-02-12 |   41 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1992 |    6 |  1989 |    1 | 1948-02-12 |   41 |    1 |   12 |    2 |  948 |    2 |    1 |       1709 | FALSE         |
+|       1993 |    4 |  1988 |    3 |            |      |    4 |   99 |   99 |  999 |    3 |    3 |            | FALSE         |
+|       1994 |    5 |  1988 |    3 | 1978-04-25 |   10 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    6 |  1988 |    3 | 1978-04-25 |   10 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    3 |  1989 |    3 | 1978-04-25 |   10 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    4 |  1989 |    3 | 1978-04-25 |   10 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    5 |  1989 |    3 | 1978-04-25 |   11 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    6 |  1989 |    3 | 1978-04-25 |   11 |    4 |   25 |    4 |  978 |    3 |    3 |       1712 | TRUE          |
+|       1994 |    3 |  1988 |    3 | 1975-05-31 |   12 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | FALSE         |
+|       1994 |    4 |  1988 |    3 | 1975-05-31 |   12 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | FALSE         |
+|       1994 |    5 |  1988 |    3 | 1975-05-31 |   12 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1994 |    6 |  1988 |    3 | 1975-05-31 |   13 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1994 |    3 |  1989 |    3 | 1975-05-31 |   13 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1994 |    4 |  1989 |    3 | 1975-05-31 |   13 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1994 |    5 |  1989 |    3 | 1975-05-31 |   13 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1994 |    6 |  1989 |    3 | 1975-05-31 |   14 |    3 |   31 |    5 |  975 |    3 |    3 |       1711 | TRUE          |
+|       1995 |    3 |  1988 |    3 | 1954-05-19 |   33 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    4 |  1988 |    3 | 1954-05-19 |   33 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    5 |  1988 |    3 | 1954-05-19 |   34 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    6 |  1988 |    3 | 1954-05-19 |   34 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    3 |  1989 |    3 | 1954-05-19 |   34 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    4 |  1989 |    3 | 1954-05-19 |   34 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    5 |  1989 |    3 | 1954-05-19 |   35 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+|       1995 |    6 |  1989 |    3 | 1954-05-19 |   35 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
+
+
+#+begin_src R :session :results silent
+pp_old_samp[!(ambiguous_id1), person_id1_m := person_id1]
+pp_old_samp[!(ambiguous_id2), person_id2_m := person_id1]
+
+1
+#+end_src
+
+
+
+*** Combining IDs
+One digression that is important at this point (and at which I lost more hours than I should have) is that 
+
+#+begin_src R :session :results silent :tangle lib_oldpme.r
+union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
+  DT[, .join_sv := seq_len(.N)]
+  DT[, .join := min(.join_sv), c1]
+
+  sep <- c(c1, c2)
+  names(sep) <- c(c2, c1)
+
+  i <- 1
+  x0 <- c2
+
+  allsame <- DT[, all(.join == .join_sv)]
+
+  while (!allsame && i <= maxiter) {
+    DT[, .join := min(.join), x0]
+
+    allsame <- DT[, all(.join_sv == .join)]
+
+    DT[, .join_sv := .join][]
+
+    x0 <- sep[x0]
+
+    i <- i + 1
+  }
+
+
+  if (!allsame) {
+    warning(glue::glue("[union_ids] Could not join IDs after {i} iterations; consider chaing `maxiter` parameter"))
+  }
+
+  DT[, .join_sv := NULL]
+
+  setnames(DT, ".join",  name_join)
+
+  return(DT)
+}
+#+end_src
 
 
 
