@@ -1357,7 +1357,7 @@ pp_old_samp[hhid == hh0][, -c("rown", "hhid", "ambiguous_id1"), with = FALSE]
 
 #+begin_src R :session :results silent
 pp_old_samp[!(ambiguous_id1), person_id1_m := person_id1]
-pp_old_samp[!(ambiguous_id2), person_id2_m := person_id1]
+pp_old_samp[!(ambiguous_id2), person_id2_m := person_id2]
 
 1
 #+end_src
