@@ -1365,25 +1365,56 @@ pp_old_samp[!(ambiguous_id2), person_id2_m := person_id2]
 
 
 *** Combining IDs
-One digression that is important at this point (and at which I lost more hours than I should have) is that 
+One digression that is important at this point (and at which I lost more hours than I should have) is that one can combine IDs in a "maximal way".
+
+For example, if we have two ID setting schemes, and we ID people as follows
+
+| t | ID 1 | ID 2 |
+|---+------+------|
+| 1 | A    | X    |
+| 2 | A    | Y    |
+| 3 | A    | X    |
+| 4 | B    | Y    |
+| 5 | B    | X    |
+
+Then we can ask: if both IDing schemes are definitely right when they match two records, but possibly wrong when they distinguish two records, how can we combine the information of two distinct IDing schemes? 
+
+In this case, because at time 2 the second IDing scheme results in ~Y~,  this means that the individual is the same at tame 4. The same holds for times 1 and 3, which imply that 5 is the same individual.
+
+If we take the "union" over the IDs, the result is that all records belong to the same individual.
+
+This can be useful for fixing missing IDs (e.g., when date of birth is not available at one point in time, but age is), and typos in the birth month/day/year.
+ 
+The function below uses an iterative procedure (*yet untested*) to match individuals.
 
 #+begin_src R :session :results silent :tangle lib_oldpme.r
 union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
-  DT[, .join_sv := seq_len(.N)]
-  DT[, .join := min(.join_sv), c1]
+  if (name_join %in% colnames(DT)) name_join <- paste0(name_join, "_copy")
 
-  sep <- c(c1, c2)
-  names(sep) <- c(c2, c1)
+  DT[!is.na(get(c1)), .c1 := .GRP, c1]
+  DT[!is.na(get(c2)), .c2 := .GRP, c2]
+
+  max1 <- DT[, max(.c1, na.rm = TRUE)]
+  max2 <- DT[, max(.c2, na.rm = TRUE)]
+
+  DT[is.na(.c1), .c1 := max1 + .I]
+  DT[is.na(.c2), .c2 := max2 + .I]
+
+  DT[, .join_sv := seq_len(.N)]
+  DT[!is.na(.c1), .join := min(.join_sv), .c1]
+
+  sep <- c(".c1" = ".c2",
+           ".c2" = ".c1")
 
   i <- 1
-  x0 <- c2
+  x0 <- ".c2"
 
   allsame <- DT[, all(.join == .join_sv)]
 
   while (!allsame && i <= maxiter) {
-    DT[, .join := min(.join), x0]
+    DT[!is.na(get(x0)), .join := min(.join), x0]
 
-    allsame <- DT[, all(.join_sv == .join)]
+    allsame <- DT[, all(.join_sv == .join, na.rm = TRUE)]
 
     DT[, .join_sv := .join][]
 
@@ -1405,6 +1436,14 @@ union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
 }
 #+end_src
 
+
+
+Let's test this by combining IDs 1 and 2.
+
+#+begin_src R :session :results silent
+union_ids(pp_old_samp, "person_id1_m", "person_id2_m", "person_id")
+1
+#+end_src
 
 
 * Issues
