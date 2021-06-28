@@ -13,6 +13,7 @@
 ** Load data
 Below is a convenience function for loading PME data into memory. You can specify unit to be "person", "household", or any other string (which will load both). The timeframe can be 80s, 90s or both (by again specifying any other string.)
 
+#+NAME: loadfun
 #+begin_src R :session :tangle lib_oldpme.r :results silent
 
 .pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
@@ -54,6 +55,7 @@ oldpmeread <- function(unit = "", timeframe = "", pme_dir = .pme_dir) {
 
 For the examples that show up later in this documentation, I have to load some files.
 
+#+NAME: load_data
 #+begin_src R :session :results silent
 
 library(ggplot2)
@@ -72,7 +74,6 @@ hh_old <- rbindlist(lapply(oldpmeread("household"), function(ll) ll$DT), fill = 
 #+end_src
 
 ** Checking for issues
-
 *** Inferred states vs V10 vs UF
 
 For years 1984-1990, state is present in column V10. The values were supposed to be
@@ -358,16 +359,11 @@ hh95[1:5, .(UF, V101, V102, V103, V106, hhid)] # show selected rows
 | 5 | 31 |   83 | 310018 |    5 |    1 | 31-83-310018-5-1 |
 
 
-This is the key for merging people and households
-
-#+begin_src R :session :results silent
-key2 <- c("UF", "MÊS", "V102", "V103")
-#+end_src
-
-
 Below I use ~hhid2~ as merging key between person and household datasets, and include ~hhid~ in the people data.
 
 #+begin_src R :session :results silent
+
+key2 <- c("UF", "MÊS", "V102", "V103")
 
 hh95[, hhid2 := generate_key(.SD, key2)]
 pp95[, hhid2 := generate_key(.SD, key2)]
@@ -377,7 +373,7 @@ pp95[hh95, hhid := hhid , on = "hhid2"]
 
 #+end_src
 
-Now let's see what we got.
+Explore what we get in the subsections below.
 
 *** Sanity check: number of people in household
 
@@ -518,6 +514,8 @@ YES!
 In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
 
 First, I remove the columns I created while exploring the keying in the above sections.
+
+
 #+begin_src R :session :results silent
 pp_old[, c("hh_pp_id", "hhidx", "hhidy", "V105m", "V102m", "V103m") := NULL]
 hh_old[, c("hh_pp_id", "hhid"):= NULL]
@@ -530,6 +528,7 @@ Let me try now to apply my combined wisdom:
 
 1. I can easily create a household ID
 
+   #+NAME: fullsample_gen_hhid
    #+begin_src R :session :results silent
 hh_old[, hhid := generate_key(.SD, c(".state", "V101", "V102", "V103", "V106"))]
 1
@@ -593,6 +592,37 @@ Breaking down what I do above:
      + That becomes ~nppl_gt10yo~
 
 - I then test for how many household IDs are ~impl_nppl~ and ~nppl_gt10yo~ different and find a single instance of that anomaly
+** Fixing December 1985 states
+Note that now with reasonable link between person and household data, we can recover the mislabeled state in year 1985 into the person dataset.
+
+A final issue occurs in December 1985:
+
+#+begin_src R :session :colnames yes
+hh_old[.state == "BR", .N, .(.year, V105)]
+#+end_src
+
+#+RESULTS:
+| .year | V105 |     N |
+|-------+------+-------|
+|  1985 |   12 | 46853 |
+
+There are files with the "_BR" suffix, which causes state to be misread by the reading algortihm. So we have to change it manually according to V10 and the table shown above.
+
+
+#+begin_src R :session :results silent
+tab_state <- data.table(
+    V10 = c(11, 21, 33, 41, 56, 59),
+    state = c("RJ", "SP", "RS", "MG", "PA", "BA")
+)
+
+tab_state[, .year := 1985]
+tab_state[, V105 := 12]
+
+hh_old[tab_state, .state := state, on = .(.year, V105, V10)]
+
+1
+#+end_src
+
 ** Weights in PME
 *** Fixing messy weights
 The first thing I do is to come up with a function that tries to reasonably
@@ -624,6 +654,7 @@ oldpme_getweights <- function(pp_old) {
 
 Let's see where that leads to different results relative to brute force conversion.
 
+#+NAME: test_weights
 #+begin_src R :session :colnames yes
 
 dtweights <- oldpme_getweights(pp_old)
@@ -634,7 +665,7 @@ dtweights[pp_old, on = .(.year, .state, V105)][PESOm != .w, .(PESOm = unique(PES
 
 #+end_src
 
-#+RESULTS:
+#+RESULTS: test_weights
 | .year | .state | V105 |       .w |     PESOm |
 |-------+--------+------+----------+-----------|
 |  2000 | BA     |    3 |      190 |      4010 |
@@ -711,11 +742,14 @@ dtweights[pp_old, on = .(.year, .state, V105)][PESOm != .w, .(PESOm = unique(PES
 |  2000 | BA     |    0 | 12120000 | 172120000 |
 
 
+- Note the 2k data issues there, and pointless weights in months not in [1, 12]
+
 So it seems that everything comes down to Bahia, in March 2000, having many entries fixed...
 
 
 I add the constructed weights to ~hh_old~.
 
+#+NAME: recover_weights
 #+begin_src R :session :results silent
 
 hh_old[dtweights, .weight := .w, on = .(.year, .state, V105) ]
@@ -750,6 +784,7 @@ ggplot(dtnppl, aes(x = .weight, y = .weight_implied, colour = .state)) +
 [[file:output/weights_comparison.png]]
 
 *** Reconciling post-90 weights with possible approach for pre-90
+
 #+begin_src R :session :results file graphics :file output/people_in_sample.pdf :colnames yes
 dtnppl[, d := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
 
@@ -787,6 +822,7 @@ hh_old[.year <= 1990 & .state == "BA", .weight := 100]
 
 Note that with the weight and the nubmer of people in interviewed households, we can estimate back the population.
 
+#+NAME: pop_estimates
 #+begin_src R :session :results file graphics :file output/pop_estimates.pdf
 dtnppl[hh_old, .weight := i..weight, on =.(.year, .state, V105)]
 dtnppl[.year <= 1990, estimate_pop_pre90 := total_ppl_sample * .weight]
@@ -803,12 +839,14 @@ ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable))
 
 What a miserable failure. Still, I add that to the person dataset.
 
+#+NAME: add_weights_finall
 #+begin_src R :session :results silent
 
 pp_old[hh_old, .weight := .weight, on = .(.year, .state, V105, hhid)] 
 
 1
 #+end_src
+
 ** Age
 
 PME stores "estimated ages" (when the respondent is not sure about birth year, or even about their age) in two different columns: ~V256~ and ~V246~.
@@ -864,6 +902,7 @@ The function below computes the age based on interview date and a vector of birt
 
 Let's add them to our data.
 
+#+NAME: build_birthday_and_age
 #+begin_src R :session :results silent
 pp_old[, .ageestimate := oldpme_ageestimate(V206, V236, V246, V256)]
 pp_old[, .bdate := oldpme_bday(V206, V236, V246)]
@@ -873,6 +912,7 @@ pp_old[, .bdate := oldpme_bday(V206, V236, V246)]
 
 Now, I recover interview day/month from the household dataset, and use that to compute an inferred age column.
 
+#+NAME: infer_age
 #+begin_src R :session :results silent
 
 pp_old[hh_old, .iviewdate :=
@@ -891,11 +931,15 @@ pp_old[, .inferred_age := dtsnippets::age_calc(.bdate, .iviewdate),
 
 The final work is to settle on a single workable age column. I do that below.
 
+#+NAME: settle_age_column
 #+begin_src R :session :results silent
 
 pp_old[.ageestimate == .inferred_age, .age := .inferred_age]
 pp_old[is.na(.ageestimate) & !is.na(.inferred_age) &
        .inferred_age < 98, .age := .inferred_age]
+pp_old[!is.na(.ageestimate) & is.na(.inferred_age) &
+       .ageestimate < 98, .age := .ageestimate]
+
 
 1
 #+end_src
@@ -915,7 +959,7 @@ Here I try to come up with a reasonable definition of unemployment, and will con
 
 cc <- intersect(c(".PIA", "occup", "labor_force"), colnames(pp_old))
 
-pp_old[, cc := NULL]
+pp_old[, (cc) := NULL]
 
 
 pp_old[, .PIA := .age >= 10]
@@ -1389,7 +1433,7 @@ The function below uses an iterative procedure (*yet untested*) to match individ
 
 #+begin_src R :session :results silent :tangle lib_oldpme.r
 union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
-  if (name_join %in% colnames(DT)) name_join <- paste0(name_join, "_copy")
+  if (name_join %in% colnames(DT)) name_join <- paste0(name_join, "_new")
 
   DT[!is.na(get(c1)), .c1 := .GRP, c1]
   DT[!is.na(get(c2)), .c2 := .GRP, c2]
