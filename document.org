@@ -1651,25 +1651,170 @@ DT[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
 ## Recover weights
 DT[hh_old, .weight := .weight, on = .(.state, .year, V105)]
 
+DT_transitions <- pp_old[, .(count = .N) , .(transition_code, .state, .year, V105)][DT, on = .(transition_code, .state, .year, V105)]
+
 1
     
 #+end_src
 
+Aggregate over states using weights:
+
+#+begin_src R :session :exports code :results silent output
+
+DT_transitions_agg <- DT_transitions[, .(count = sum(.weight * count, na.rm = TRUE)) , .(transition_code, .year, V105, Date)]
 
 
-
-#+begin_src R :session
-DT_transitions <- pp_old[, .(count = .N) , .(transition_code, .state, .year, V105)][DT, on = .(transition_code, .state, .year, V105)]
-
-1
 #+end_src
 
-#+RESULTS:
+*** Plots
 
+Now let's plot some things. I begin by computing the inflow/outflow data in absolute terms.
 
-#+begin_src R :session
+#+begin_src R :session :exports code :results silent output
+
+relevant_stati <- c("formal_salaried", "informal_salaried", "self_employed", "unemployed", "OLF")
+
+inflows <- lapply(relevant_stati,
+                  function(st) {
+                    dict_transition[status_previous == st & status_now != st][
+                      DT_transitions_agg, on = .(transition_code), nomatch = NULL
+                    ]
+                  })
+
+outflows <- lapply(relevant_stati,
+                  function(st) {
+                    dict_transition[status_previous != st & status_now == st][
+                      DT_transitions_agg, on = .(transition_code), nomatch = NULL
+                    ]
+                  })
+
+names(inflows) <- names(outflows) <- relevant_stati
+
 
 #+end_src
+
+
+Now let's plot stuff.
+1. OLF:
+
+   - inflows
+     #+begin_src R :session :results file graphics output :file output/OLF_inflows_total.pdf
+
+ggplot(inflows[["OLF"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/OLF_inflows_total.pdf]]
+
+   - outflows
+     #+begin_src R :session :results file graphics output :file output/OLF_outflows_total.pdf
+
+ggplot(outflows[["OLF"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/OLF_inflows_total.pdf]]
+
+2. Unemployment:
+
+   - inflows
+     #+begin_src R :session :results file graphics output :file output/unemployed_inflows_total.pdf
+
+ggplot(inflows[["unemployed"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/unemployed_inflows_total.pdf]]
+
+   - outflows
+     #+begin_src R :session :results file graphics output :file output/unemployed_outflows_total.pdf
+
+ggplot(outflows[["unemployed"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/unemployed_inflows_total.pdf]]
+
+3. Formal salaried
+
+   - inflows
+     #+begin_src R :session :results file graphics output :file output/formal_salaried_inflows_total.pdf
+
+ggplot(inflows[["formal_salaried"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/formal_salaried_inflows_total.pdf]]
+
+   - outflows
+     #+begin_src R :session :results file graphics output :file output/formal_salaried_outflows_total.pdf
+
+ggplot(outflows[["formal_salaried"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/formal_salaried_inflows_total.pdf]]
+
+4. Informal salaried:
+
+   - inflows
+     #+begin_src R :session :results file graphics output :file output/informal_salaried_inflows_total.pdf
+
+ggplot(inflows[["informal_salaried"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/informal_salaried_inflows_total.pdf]]
+
+   - outflows
+     #+begin_src R :session :results file graphics output :file output/informal_salaried_outflows_total.pdf
+
+ggplot(outflows[["informal_salaried"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/informal_salaried_inflows_total.pdf]]
+
+5. Self-employed:
+
+   - inflows
+     #+begin_src R :session :results file graphics output :file output/self_employed_inflows_total.pdf
+
+ggplot(inflows[["self_employed"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/self_employed_inflows_total.pdf]]
+
+   - outflows
+     #+begin_src R :session :results file graphics output :file output/self_employed_outflows_total.pdf
+
+ggplot(outflows[["self_employed"]], aes(x = Date, y = count)) + geom_area(aes(fill = Label)) +
+  theme_bw() + scale_fill_brewer(palette = "Set2")
+
+     #+end_src
+
+     #+RESULTS:
+     [[file:output/self_employed_inflows_total.pdf]]
+
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
