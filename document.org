@@ -16,7 +16,7 @@
 Below is a convenience function for loading PME data into memory. You can specify unit to be "person", "household", or any other string (which will load both). The timeframe can be 80s, 90s or both (by again specifying any other string.)
 
 #+NAME: loadfun
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 
 .pme_dir <- "/home/gustavo/Dropbox/v2/data/PME/FullData"
 
@@ -58,7 +58,7 @@ oldpmeread <- function(unit = "", timeframe = "", pme_dir = .pme_dir) {
 For the examples that show up later in this documentation, I have to load some files.
 
 #+NAME: load_data
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 library(ggplot2)
 library(data.table)
@@ -135,7 +135,7 @@ countby(hh_old[.year == 1988], .x = ".state", bycols = c("V10"))[[1]]
 
 Create a flag for that: note that ~oldpme_flag_bad_state~ *has side-effects*.
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 
 #' Flag bad state values. HAS SIDE EFFECTS ON `hh_old`
 oldpme_flag_bad_state <- function(hh_old, flagname = ".flbadstate") {
@@ -181,7 +181,7 @@ countby(hh_old, .x = ".flbadstate", bycols = ".year")[[1]]
 |  2000 |              489365 |                  0 |
 
 *** Inferred year vs ANO
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 hh_old[, .flag_inconsistent_year := ANO != .year ]
 pp_old[, .flag_inconsistent_year := ANO != .year ]
 
@@ -325,7 +325,7 @@ Note: see [[sec:issue-identify-people-household]] for how the algorithm came abo
 
 First, just a quick wrapper for pasting a given set of columns with a dash; whenever one of the columns is missing, that invalidates the id.
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 
 generate_key <- function(dthh, keyvars = c("V10", "V101", "V102", "V103", "V106")) {
   vkey <- Reduce(function(x,y) paste(x, y, sep = "-"),
@@ -363,7 +363,7 @@ hh95[1:5, .(UF, V101, V102, V103, V106, hhid)] # show selected rows
 
 Below I use ~hhid2~ as merging key between person and household datasets, and include ~hhid~ in the people data.
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 key2 <- c("UF", "MÊS", "V102", "V103")
 
@@ -460,7 +460,7 @@ A few things to be decided:
 
 
 First, set the household key in the household dataset (doing that for all years anyway):
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 keyhh <- c(".state", "V101", "V102", "V103", "V106")
 
 hh_old[, hhid := generate_key(.SD, keyhh)]
@@ -529,7 +529,7 @@ hh_old[.state == "BR", .N, .(.year, V105)]
 There are files with the "_BR" suffix, which causes state to be misread by the reading algortihm. So we have to change it manually according to V10 and the table shown above.
 
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 tab_state <- data.table(
     V10 = c(11, 21, 33, 41, 56, 59),
     state = c("RJ", "SP", "RS", "MG", "PE", "BA")
@@ -550,7 +550,7 @@ In this section, I use what I learned in the two prior sections to create a spec
 First, I remove the columns I created while exploring the keying in the above sections.
 
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 pp_old[, c("hh_pp_id", "hhidx", "hhidy", "V105m", "V102m", "V103m") := NULL]
 hh_old[, c("hh_pp_id", "hhid"):= NULL]
 
@@ -563,14 +563,14 @@ Let me try now to apply my combined wisdom:
 1. I can easily create a household ID
 
    #+NAME: fullsample_gen_hhid
-   #+begin_src R :session :results silent
+   #+begin_src R :session :results silent output
 hh_old[, hhid := generate_key(.SD, c(".state", "V101", "V102", "V103", "V106"))]
 1
    #+end_src
 
 2. For ~1984 <= yyyy <= 1990~, I can simply use the entry number to recover household id in person dataset.
 
-   #+begin_src R :session :results silent
+   #+begin_src R :session :results silent output
 pp_old[hh_old[!is.na(n_entry)], `:=`(hhid = hhid, V105 = V105),
        on = .(.state, .year, n_entry)]
 ## if `hhid` and `V105` are already in the data, the statemenet needs to be
@@ -580,7 +580,7 @@ pp_old[hh_old[!is.na(n_entry)], `:=`(hhid = hhid, V105 = V105),
 
 3. As far as the new years are concerned, there is an issue with V102 documented in [[sec:flag_v102]] that needs to be dealt with.
 
-   #+begin_src R :session :results silent
+   #+begin_src R :session :results silent output
 pp_old[!grepl("\\d{6,8}", V102), V102 := NA_character_]
 pp_old[, V102 := as.integer(V102)]
 1
@@ -590,13 +590,13 @@ pp_old[, V102 := as.integer(V102)]
 
    (In order for me to do that, I first have to match the column ~V105~ name
    [ ~MÊS => V105~ ].)
-   #+begin_src R :session :results silent
+   #+begin_src R :session :results silent output
 pp_old[is.na(n_entry), V105 := MÊS][]
 1
    #+end_src
 
 
-   #+begin_src R :session :results silent
+   #+begin_src R :session :results silent output
 pp_old[hh_old[is.na(n_entry)], hhid := i.hhid,
        on = .(.year, .state, V105, V102, V103)]
 1
@@ -634,7 +634,7 @@ recover weights from messy data.
 I take each state/year/month and select the "integer-like value" [see the
 regular expression in the function] that shows up most often.
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 oldpme_getweights <- function(pp_old) {
   # pp_old[, (newcname) := ifelse(grepl("^\\d+$", PESO), as.integer(PESO), NA)]
 
@@ -753,7 +753,7 @@ So it seems that everything comes down to Bahia, in March 2000, having many entr
 I add the constructed weights to ~hh_old~.
 
 #+NAME: recover_weights
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 hh_old[dtweights, .weight := .w, on = .(.year, .state, V105) ]
 
@@ -811,7 +811,7 @@ ggplot(dt_tot, aes(x = d, y = total)) + geom_line() +
 As expected, there is something happening with the number of people in the sample. I think the table from the documentation might make sense after all. For that reason, I try the following:
 
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 hh_old[.year <= 1990 & .state == "RJ", .weight := 200]
 hh_old[.year <= 1990 & .state == "SP", .weight := 300]
 hh_old[.year <= 1990 & .state == "RS", .weight := 100]
@@ -843,7 +843,7 @@ ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable))
 What a miserable failure. Still, I add that to the person dataset.
 
 #+NAME: add_weights_finall
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 pp_old[hh_old, .weight := .weight, on = .(.year, .state, V105, hhid)] 
 
@@ -858,7 +858,7 @@ Note that V246 is the same column that records the birth year of the person. Eac
 
 ~V256~ is described as "estimated age", but lacks a full documentation. At the end of the day, if ~V246~ results in a missing and we have something on ~V256~, I use ~V256~. If V246 and V256 are both defined, but disagree (which happen very very infrequently), I assign a missing value.
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 oldpme_ageestimate <- function(vday, vmonth, vyear, vage) {
   N <- length(vday)
 
@@ -892,7 +892,7 @@ oldpme_ageestimate <- function(vday, vmonth, vyear, vage) {
 
 The function below builds the birthday in each record.
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 oldpme_bday <- function(vday, vmonth, vyear) {
   built_date <- as.IDate(
     lubridate::fast_strptime(paste(paste0(1, vyear), vmonth, vday, sep = "-"),
@@ -906,7 +906,7 @@ The function below computes the age based on interview date and a vector of birt
 Let's add them to our data.
 
 #+NAME: build_birthday_and_age
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 pp_old[, .ageestimate := oldpme_ageestimate(V206, V236, V246, V256)]
 pp_old[, .bdate := oldpme_bday(V206, V236, V246)]
 1
@@ -916,7 +916,7 @@ pp_old[, .bdate := oldpme_bday(V206, V236, V246)]
 Now, I recover interview day/month from the household dataset, and use that to compute an inferred age column.
 
 #+NAME: infer_age
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 pp_old[hh_old, .iviewdate :=
            as.IDate(lubridate::fast_strptime(paste(.year, V2002, V2001,
@@ -935,7 +935,7 @@ pp_old[, .inferred_age := dtsnippets::age_calc(.bdate, .iviewdate),
 The final work is to settle on a single workable age column. I do that below.
 
 #+NAME: settle_age_column
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 pp_old[.ageestimate == .inferred_age, .age := .inferred_age]
 pp_old[is.na(.ageestimate) & !is.na(.inferred_age) &
@@ -958,7 +958,7 @@ With that procedure, we get a total of src_R[:session :exports results]{100*pp_o
 ** Unemployment
 Here I try to come up with a reasonable definition of unemployment, and will contrast the outcome with official statistics.
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 cc <- intersect(c(".PIA", "occup", "labor_force"), colnames(pp_old))
 
@@ -1087,7 +1087,7 @@ pp_old[labor_force == FALSE, .labor_status := "OLF"]
 
 Let's tabulate this over time.
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 
 timetab <- pp_old[, .(freq = .N), .(.labor_status, .year, .state, V105)]
@@ -1311,14 +1311,14 @@ Now, I start to sophisticate the merge a little bit. Let's try to identify peopl
 
 I begin by setting the key to household > sex > age
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 setkey(pp_old_samp, hhid, V202, .age)
 1
 #+end_src
 
 And then I test for whether ages increase by one or zero (it should be the same person in that case). (This turns out somewhat complicated if a for loop is to be avoided.)
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 ## Tag where age increasese by anything different than c(0, 1)
 pp_old_samp[, .tag_age_change := frollapply(.age, 2,
                                      function(x) {
@@ -1402,7 +1402,7 @@ pp_old_samp[hhid == hh0][, -c("rown", "hhid", "ambiguous_id1"), with = FALSE]
 |       1995 |    6 |  1989 |    3 | 1954-05-19 |   35 |    2 |   19 |    5 |  954 |    1 |    2 |       1710 | FALSE         |
 
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 pp_old_samp[!(ambiguous_id1), person_id1_m := person_id1]
 pp_old_samp[!(ambiguous_id2), person_id2_m := person_id2]
 
@@ -1434,7 +1434,7 @@ This can be useful for fixing missing IDs (e.g., when date of birth is not avail
  
 The function below uses an iterative procedure (*yet untested*) to match individuals.
 
-#+begin_src R :session :results silent :tangle lib_oldpme.r
+#+begin_src R :session :results silent output :tangle lib_oldpme.r
 union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
   if (name_join %in% colnames(DT)) name_join <- paste0(name_join, "_new")
 
@@ -1489,7 +1489,7 @@ union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
 
 Let's test this by combining IDs 1 and 2.
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 union_ids(pp_old_samp, "person_id1_m", "person_id2_m", "person_id")
 1
 #+end_src
@@ -1517,7 +1517,7 @@ pp_old[, .N, ambiguous_id1]
 
 That's a solid performance, but let's try to add the second one based on age.
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 setkey(pp_old, hhid, V202, .age, .year)
 pp_old[, .tag_age_change := frollapply(.age, 2,
                                      function(x) {
@@ -1561,7 +1561,7 @@ pp_old[, .N, ambiguous_id2]
 Now combine the two IDs.
 
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 union_ids(pp_old, "person_id1_m", "person_id2_m", "person_id_join")
 1
 #+end_src
@@ -1571,7 +1571,7 @@ union_ids(pp_old, "person_id1_m", "person_id2_m", "person_id_join")
 ** Constructing the transitions in labor status 
 Let's tag the people each month who have non-missing records that and the prior month
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 setkey(pp_old, person_id_join, .year, V105)
 pp_old[, .labor_status_L1 := data.table::shift(.labor_status, 1), person_id_join]
 pp_old[, .fl_available_transition := !is.na(.labor_status) & !is.na(.labor_status_L1)]
@@ -1633,10 +1633,9 @@ dict_transition
 |              25 | unemployed        | unemployed        | U -> U       |
 
 
-
 Build a data.table with the relevant months/years and transition codes:
 
-#+begin_src R :session :results silent
+#+begin_src R :session :results silent output
 
 DT <- as.data.table(
   expand.grid(
@@ -2026,7 +2025,7 @@ n_proper/n_non_na
    nearly all of the dataset has the proper format. I create a function to flag that.
 
 
-#+begin_src R :session :tangle lib_oldpme.r :results silent
+#+begin_src R :session :tangle lib_oldpme.r :results silent output
 oldpme_flag_V102 <- function(pp_old) {
    pp_old[is.na(V102), .fl102 := 1]
    pp_old[!is.na(V102), .fl102 := ifelse(grepl("\\d{6,8}", V102), 0, 2)]
