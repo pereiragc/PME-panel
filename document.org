@@ -1,5 +1,7 @@
 #+TITLE: Documentation
 #+AUTHOR: Gustavo Pereira
+#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup
+#+PROPERTY: header-args :exports both
 
 * Dependencies
 - data.table
@@ -2278,7 +2280,6 @@ countby(pp_old[!is.na(V313)], ".fl_valid313", ".year")[[1]]
 
 
 Note that we see, in the year range 1986-1989 range, most of ~V313~'s values are invalid. That makes it very hard to understand who is in or out of the labor force.
-
 
 * Tasks
 ** DONE Identify people and households
