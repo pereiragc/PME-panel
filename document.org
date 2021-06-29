@@ -1473,7 +1473,9 @@ union_ids <- function(DT, c1, c2, name_join, maxiter=50) {
     warning(glue::glue("[union_ids] Could not join IDs after {i} iterations; consider chaing `maxiter` parameter"))
   }
 
-  DT[, .join_sv := NULL]
+  DT[is.na(get(c1)) & is.na(get(c2)), .join := NA]
+
+  DT[, c(".join_sv", ".c1", ".c2") := NULL]
 
   setnames(DT, ".join",  name_join)
 
