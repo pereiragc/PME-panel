@@ -1534,8 +1534,6 @@ tmpDT <- pp_old[.tag_age_change  > 0][, .(person_id2 = .I, rown)]
 ## use rolling merge
 pp_old <- tmpDT[pp_old[, -".tag_age_change", with = FALSE], on = .(rown), roll = TRUE]
 
-pp_old[, `:=`(.tag_age_change = NULL, )]
-
 rm(tmpDT)
 gc()
 
