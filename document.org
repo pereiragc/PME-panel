@@ -1502,19 +1502,21 @@ pp_old[, c("person_id1", "ambiguous_id1", "person_id1_m") := NULL]
 
 pp_old[!is.na(V202) & !is.na(hhid) & !is.na(.bdate), person_id1 := .GRP, .(hhid, V202, .bdate)]
 pp_old[!is.na(person_id1), ambiguous_id1 := .N > 1, .(person_id1, .year, V105)]
-pp_old_samp[!(ambiguous_id1), person_id1_m := person_id1]
+pp_old[!(ambiguous_id1), person_id1_m := person_id1]
 pp_old[, .N, ambiguous_id1]
 #+end_src
 
 #+RESULTS:
-| x    |
-|------|
-| TRUE |
+| ambiguous_id1 |        N |
+|---------------+----------|
+| FALSE         | 18902267 |
+|               |   755019 |
+| TRUE          |    79472 |
 
 That's a solid performance, but let's try to add the second one based on age.
 
-
 #+begin_src R :session :results silent
+setkey(pp_old, hhid, V202, .age, .year)
 pp_old[, .tag_age_change := frollapply(.age, 2,
                                      function(x) {
                                        agediff <- x[2] - x[1]
