@@ -1492,6 +1492,183 @@ union_ids(pp_old_samp, "person_id1_m", "person_id2_m", "person_id")
 1
 #+end_src
 
+** Apply identification algorithm to full sample
+I'm following the procedure outline in the above section.
+
+Add IDs and inspect ambiguity:
+#+begin_src R :session :colnames yes
+## Remove person_id1 potentially added before
+pp_old[, c("person_id1", "ambiguous_id1", "person_id1_m") := NULL]
+
+pp_old[!is.na(V202) & !is.na(hhid) & !is.na(.bdate), person_id1 := .GRP, .(hhid, V202, .bdate)]
+pp_old[!is.na(person_id1), ambiguous_id1 := .N > 1, .(person_id1, .year, V105)]
+pp_old_samp[!(ambiguous_id1), person_id1_m := person_id1]
+pp_old[, .N, ambiguous_id1]
+#+end_src
+
+#+RESULTS:
+| x    |
+|------|
+| TRUE |
+
+That's a solid performance, but let's try to add the second one based on age.
+
+
+#+begin_src R :session :results silent
+pp_old[, .tag_age_change := frollapply(.age, 2,
+                                     function(x) {
+                                       agediff <- x[2] - x[1]
+                                       return(!(agediff %in% c(0,1)))
+                                     },
+                                     fill = 1),
+            .(hhid, V202)]
+## add row number
+
+pp_old[, rown := 1:.N]
+    
+## select age changing points
+tmpDT <- pp_old[.tag_age_change  > 0][, .(person_id2 = .I, rown)]
+
+## use rolling merge
+pp_old <- tmpDT[pp_old[, -".tag_age_change", with = FALSE], on = .(rown), roll = TRUE]
+
+pp_old[, `:=`(.tag_age_change = NULL, )]
+
+rm(tmpDT)
+gc()
+
+1
+
+#+end_src
+
+Inspect ambiguity:
+
+#+begin_src R :session :colnames yes
+pp_old[!is.na(person_id2), ambiguous_id2 := .N > 1, .(person_id2, .year, V105)] 
+pp_old[!(ambiguous_id2), person_id2_m := person_id2]
+pp_old[, .N, ambiguous_id2]
+#+end_src
+
+#+RESULTS:
+| ambiguous_id2 |        N |
+|---------------+----------|
+| FALSE         | 14773253 |
+| TRUE          |  4963505 |
+
+
+Now combine the two IDs.
+
+
+#+begin_src R :session :results silent
+union_ids(pp_old, "person_id1_m", "person_id2_m", "person_id_join")
+1
+#+end_src
+
+#+RESULTS:
+: 1
+** Constructing the transitions in labor status 
+Let's tag the people each month who have non-missing records that and the prior month
+
+#+begin_src R :session :results silent
+setkey(pp_old, person_id_join, .year, V105)
+pp_old[, .labor_status_L1 := data.table::shift(.labor_status, 1), person_id_join]
+pp_old[, .fl_available_transition := !is.na(.labor_status) & !is.na(.labor_status_L1)]
+
+1
+#+end_src
+
+
+We encode transition types, assigning labels too:
+
+#+begin_src R :session :colnames yes
+
+pp_old[(.fl_available_transition), transition_code := .GRP, .(.labor_status, .labor_status_L1)]
+
+dict_transition <- pp_old[(.fl_available_transition), .(status_previous = first(.labor_status_L1), status_now = first(.labor_status)), transition_code]    
+
+transition_labels <- c(
+  "self_employed" = "s.e.",
+  "OLF" = "olf",
+  "informal_salaried" = "I", 
+  "formal_salaried" = "F",
+  "unemployed" = "U" 
+  )
+    
+dict_transition[, Label := paste(transition_labels[status_previous], transition_labels[status_now],
+                                 sep = " -> ")]
+
+
+dict_transition
+#+end_src
+
+#+RESULTS:
+| transition_code | status_previous   | status_now        | Label        |
+|-----------------+-------------------+-------------------+--------------|
+|               1 | self_employed     | OLF               | s.e. -> olf  |
+|               2 | OLF               | OLF               | olf -> olf   |
+|               3 | OLF               | informal_salaried | olf -> I     |
+|               4 | informal_salaried | unemployed        | I -> U       |
+|               5 | unemployed        | OLF               | U -> olf     |
+|               6 | OLF               | formal_salaried   | olf -> F     |
+|               7 | formal_salaried   | formal_salaried   | F -> F       |
+|               8 | formal_salaried   | self_employed     | F -> s.e.    |
+|               9 | formal_salaried   | OLF               | F -> olf     |
+|              10 | OLF               | unemployed        | olf -> U     |
+|              11 | unemployed        | informal_salaried | U -> I       |
+|              12 | informal_salaried | informal_salaried | I -> I       |
+|              13 | informal_salaried | formal_salaried   | I -> F       |
+|              14 | self_employed     | formal_salaried   | s.e. -> F    |
+|              15 | formal_salaried   | informal_salaried | F -> I       |
+|              16 | informal_salaried | self_employed     | I -> s.e.    |
+|              17 | self_employed     | self_employed     | s.e. -> s.e. |
+|              18 | informal_salaried | OLF               | I -> olf     |
+|              19 | unemployed        | formal_salaried   | U -> F       |
+|              20 | self_employed     | unemployed        | s.e. -> U    |
+|              21 | OLF               | self_employed     | olf -> s.e.  |
+|              22 | formal_salaried   | unemployed        | F -> U       |
+|              23 | unemployed        | self_employed     | U -> s.e.    |
+|              24 | self_employed     | informal_salaried | s.e. -> I    |
+|              25 | unemployed        | unemployed        | U -> U       |
+
+
+
+Build a data.table with the relevant months/years and transition codes:
+
+#+begin_src R :session :results silent
+
+DT <- as.data.table(
+  expand.grid(
+    transition_code = seq(1,25),
+    .state = setdiff(pp_old[, unique(.state)], "BR"),
+    V105 = seq(1,12),
+    .year = pp_old[, seq(min(.year), max(.year))]
+  )
+) 
+
+DT[, Date := zoo::as.yearmon(paste(.year, V105, sep = "-"))]
+
+## Recover weights
+DT[hh_old, .weight := .weight, on = .(.state, .year, V105)]
+
+1
+    
+#+end_src
+
+
+
+
+#+begin_src R :session
+DT_transitions <- pp_old[, .(count = .N) , .(transition_code, .state, .year, V105)][DT, on = .(transition_code, .state, .year, V105)]
+
+1
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src R :session
+
+#+end_src
 
 * Issues
 ** [2021-06-01 Tue] Weird entries in PME 2000
