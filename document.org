@@ -437,6 +437,7 @@ pp95[hhid %in% hh_sample, .(implied_n_people = length(unique(V201))), hhid][orde
 
 ** Combining ~person~ and ~household~ pre-1990
 <<sec:combine_hh_pp_algo>>
+
 The key to combine person and household is to use the columns (see [[sec:issue-identify-people-household]]):
 | Column       | Meaning                             | Availability 80s  | Availability 90s  |
 |--------------+-------------------------------------+-------------------+-------------------|
@@ -509,6 +510,37 @@ pp_old[, .(different_ids_count = sum(hhidx != hhidy, na.rm = TRUE))]
 |                   0 |
 
 YES!
+** Fixing December 1985 states
+Now that we checked that IDing makes sense, we have to deal with December 1985.
+
+What's special about that month is that all PME files have the "_BR" instead of "_{RJ, SP, RS, PE, BA}" suffix, so I can't use the filename to infer the state.
+
+#+begin_src R :session :colnames yes
+hh_old[.state == "BR", .N, .(.year, V105)]
+#+end_src
+
+#+RESULTS:
+| .year | V105 |     N |
+|-------+------+-------|
+|  1985 |   12 | 46853 |
+
+There are files with the "_BR" suffix, which causes state to be misread by the reading algortihm. So we have to change it manually according to V10 and the table shown above.
+
+
+#+begin_src R :session :results silent
+tab_state <- data.table(
+    V10 = c(11, 21, 33, 41, 56, 59),
+    state = c("RJ", "SP", "RS", "MG", "PE", "BA")
+)
+
+tab_state[, .year := 1985]
+tab_state[, V105 := 12]
+
+hh_old[tab_state, .state := state, on = .(.year, V105, V10)]
+
+1
+#+end_src
+
 ** Combining ~person~ and ~household~ for all old PME years
 
 In this section, I use what I learned in the two prior sections to create a specific function that adds a key to join person/household to the datasets.
@@ -592,37 +624,6 @@ Breaking down what I do above:
      + That becomes ~nppl_gt10yo~
 
 - I then test for how many household IDs are ~impl_nppl~ and ~nppl_gt10yo~ different and find a single instance of that anomaly
-** Fixing December 1985 states
-Note that now with reasonable link between person and household data, we can recover the mislabeled state in year 1985 into the person dataset.
-
-A final issue occurs in December 1985:
-
-#+begin_src R :session :colnames yes
-hh_old[.state == "BR", .N, .(.year, V105)]
-#+end_src
-
-#+RESULTS:
-| .year | V105 |     N |
-|-------+------+-------|
-|  1985 |   12 | 46853 |
-
-There are files with the "_BR" suffix, which causes state to be misread by the reading algortihm. So we have to change it manually according to V10 and the table shown above.
-
-
-#+begin_src R :session :results silent
-tab_state <- data.table(
-    V10 = c(11, 21, 33, 41, 56, 59),
-    state = c("RJ", "SP", "RS", "MG", "PA", "BA")
-)
-
-tab_state[, .year := 1985]
-tab_state[, V105 := 12]
-
-hh_old[tab_state, .state := state, on = .(.year, V105, V10)]
-
-1
-#+end_src
-
 ** Weights in PME
 *** Fixing messy weights
 The first thing I do is to come up with a function that tries to reasonably
@@ -834,7 +835,7 @@ ggplot(pop_compare, aes(x = d, y = value, colour = .state, linetype = variable))
   geom_line() + scale_colour_brewer(palette = "Set2") + theme_bw()
 #+end_src
 
-#+RESULTS:
+#+RESULTS: pop_estimates
 [[file:output/pop_estimates.pdf]]
 
 What a miserable failure. Still, I add that to the person dataset.
@@ -1005,10 +1006,10 @@ dt_unemp[, .SD[1:2] , Series]
 #+RESULTS:
 | Series                   | .year | V105 |       unemp_rate |
 |--------------------------+-------+------+------------------|
-| Constructed (weighted)   |  1984 |    1 | 8.29792490207276 |
-| Constructed (weighted)   |  1984 |    2 | 8.98037659835562 |
-| Constructed (unweighted) |  1984 |    1 | 8.31780024472205 |
-| Constructed (unweighted) |  1984 |    2 | 9.07450307372515 |
+| Constructed (weighted)   |  1984 |    1 | 8.29687646344928 |
+| Constructed (weighted)   |  1984 |    2 | 8.96333184093756 |
+| Constructed (unweighted) |  1984 |    1 | 8.31385439062399 |
+| Constructed (unweighted) |  1984 |    2 | 9.05738065685621 |
 
 
 above, just an example of how it looks like... Now I download official unemployment data.
